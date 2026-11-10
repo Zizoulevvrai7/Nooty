@@ -101,23 +101,19 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         pageLabel.translatesAutoresizingMaskIntoConstraints = false
         pageLabel.font = .preferredFont(forTextStyle: .footnote)
         pageLabel.adjustsFontForContentSizeCategory = true
-        pageLabel.textColor = Theme.secondaryText
-        pageLabel.backgroundColor = Theme.panel
-        pageLabel.layer.cornerRadius = 12
+        pageLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: 13, weight: .semibold))
+        pageLabel.textColor = .white
+        pageLabel.backgroundColor = Theme.ink.withAlphaComponent(0.82)
+        pageLabel.layer.cornerRadius = 13
         pageLabel.layer.masksToBounds = true
-        pageLabel.layer.borderWidth = 1
-        pageLabel.layer.borderColor = Theme.hairline.cgColor
         view.addSubview(pageLabel)
 
         let guide = view.safeAreaLayoutGuide
-        let preferredWidth = toolStrip.widthAnchor.constraint(equalToConstant: 760)
-        preferredWidth.priority = .defaultLow
         NSLayoutConstraint.activate([
             toolStrip.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
             toolStrip.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             toolStrip.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 10),
             toolStrip.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -10),
-            preferredWidth,
             pageLabel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
             pageLabel.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -12),
         ])
@@ -167,9 +163,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         manifest.lastPageIndex = currentPageIndex()
         let hadChanges = contentChanged
         saveNow(wait: true)
-        if hadChanges || !FileManager.default.fileExists(atPath: library.thumbnailURL(itemID).path) {
-            if let image = makeThumbnail() { store.queue.sync { store.writeThumbnail(image) } }
-        }
+        if hadChanges, let image = makeThumbnail() { store.queue.sync { store.writeThumbnail(image) } }
         if hadChanges { library.mutate { $0.touch(itemID, now: nowMs()) } }
     }
 
@@ -426,10 +420,10 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
             savedGeneration = max(savedGeneration, generation)
             if saveErrorShown {
                 saveErrorShown = false
-                pageLabel.textColor = Theme.secondaryText
+                pageLabel.backgroundColor = Theme.ink.withAlphaComponent(0.82)
             }
         case let .failure(error):
-            pageLabel.textColor = .systemRed
+            pageLabel.backgroundColor = .systemRed
             guard !saveErrorShown, presentedViewController == nil, view.window != nil else { return }
             saveErrorShown = true
             let alert = UIAlertController(title: L("common.error"), message: L("save.error", error.localizedDescription), preferredStyle: .alert)

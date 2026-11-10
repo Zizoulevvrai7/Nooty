@@ -24,8 +24,12 @@ final class ToolStripView: UIView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
         scroll.addSubview(stack)
+        // La barre épouse son contenu ; elle ne défile que si l'écran est trop étroit.
         let fit = scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 16)
         fit.priority = .defaultHigh
+        let compact = stack.widthAnchor.constraint(equalToConstant: 0)
+        compact.priority = UILayoutPriority(50)
+        compact.isActive = true
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -87,6 +91,7 @@ final class ToolStripView: UIView {
                 self?.update { $0.eraserMode = mode?.selectedSegmentIndex == 0 ? .stroke : .precise }
             }, for: .valueChanged)
             mode.accessibilityLabel = L("eraser.mode")
+            mode.setContentHuggingPriority(.required, for: .horizontal)
             stack.addArrangedSubview(mode)
             if state.eraserMode == .precise {
                 for i in ToolState.eraserSizes.indices { stack.addArrangedSubview(eraserSizeButton(index: i)) }
@@ -97,6 +102,7 @@ final class ToolStripView: UIView {
             hint.font = .preferredFont(forTextStyle: .footnote)
             hint.adjustsFontForContentSizeCategory = true
             hint.textColor = Theme.secondaryText
+            hint.setContentHuggingPriority(.required, for: .horizontal)
             stack.addArrangedSubview(hint)
         }
     }
@@ -105,6 +111,7 @@ final class ToolStripView: UIView {
 
     private func sized(_ button: UIButton, width: CGFloat = 44) -> UIButton {
         button.translatesAutoresizingMaskIntoConstraints = false
+        button.setContentHuggingPriority(.required, for: .horizontal)
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(greaterThanOrEqualToConstant: width),
             button.heightAnchor.constraint(equalToConstant: 44),

@@ -38,12 +38,14 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
         let layout = UICollectionViewCompositionalLayout { _, environment in
             let width = environment.container.effectiveContentSize.width
             let columns = max(2, Int(width / 170))
-            let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .fractionalHeight(1)))
+            // Largeur fixe par colonne : une rangée incomplète reste alignée à gauche.
+            let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1 / CGFloat(columns)), heightDimension: .fractionalHeight(1)
+            ))
             let group = NSCollectionLayoutGroup.horizontal(
                 layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(262)),
-                repeatingSubitem: item, count: columns
+                subitems: [item]
             )
-            group.interItemSpacing = .fixed(12)
             let section = NSCollectionLayoutSection(group: group)
             section.interGroupSpacing = 14
             section.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 20, bottom: 40, trailing: 20)
@@ -147,9 +149,11 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
 
     private func thumbnail(for item: LibraryEntry) -> UIImage? {
         guard item.kind == .notebook else { return nil }
-        let key = "\(item.id.uuidString)-\(item.updatedAt)" as NSString
+        let url = store.thumbnailURL(item.id)
+        let stamp = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate?.timeIntervalSince1970 ?? 0
+        let key = "\(item.id.uuidString)-\(stamp)" as NSString
         if let cached = thumbnails.object(forKey: key) { return cached }
-        guard let image = UIImage(contentsOfFile: store.thumbnailURL(item.id).path) else { return nil }
+        guard let image = UIImage(contentsOfFile: url.path) else { return nil }
         thumbnails.setObject(image, forKey: key)
         return image
     }

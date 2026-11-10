@@ -98,6 +98,9 @@ final class LibraryStore {
         let item = LibraryEntry(kind: .notebook, parentID: parent, title: index.uniqueTitle(clean, in: parent), createdAt: nowMs(), color: nextColor())
         let manifest = NotebookManifest(id: item.id, pages: [PageInfo(background: background)], updatedAt: nowMs())
         try NotebookStore.create(directory: notebookDirectory(item.id), manifest: manifest)
+        // Miniature initiale : le papier choisi, pour que la couverture ne soit jamais vide.
+        let paper = PaperRenderer.image(background, pageSize: CGSize(width: Page.a4Width, height: Page.a4Height), width: 336)
+        try? paper.pngData()?.write(to: thumbnailURL(item.id), options: .atomic)
         mutate { $0.add(item) }
         return item
     }

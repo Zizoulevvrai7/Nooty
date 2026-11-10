@@ -33,9 +33,9 @@ enum PenStyle: String, Codable, CaseIterable {
 
     var symbol: String {
         switch self {
-        case .ball: return "pencil.tip"
-        case .fountain: return "paintbrush.pointed"
-        case .brush: return "paintbrush"
+        case .ball: return "pencil"
+        case .fountain: return "pencil.tip"
+        case .brush: return "paintbrush.pointed"
         }
     }
 }
