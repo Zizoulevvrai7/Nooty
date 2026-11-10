@@ -13,6 +13,18 @@ final class InkConverterTests: XCTestCase {
         return strokes
     }
 
+    /// Égalité exacte de tous les champs, sauf l'inclinaison : PencilKit la stocke avec une
+    /// précision réduite et elle oscille d'environ 2·10⁻⁵ rad (0,001°) d'un passage à l'autre.
+    private func assertSamePoints(_ a: [InkPoint], _ b: [InkPoint], file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(a.count, b.count, file: file, line: line)
+        for (p, q) in zip(a, b) {
+            var p2 = p
+            p2.altitude = q.altitude
+            XCTAssertEqual(p2, q, file: file, line: line)
+            XCTAssertEqual(p.altitude, q.altitude, accuracy: 1e-4, file: file, line: line)
+        }
+    }
+
     func testToolMappingRoundTrip() {
         for tool in InkTool.allCases {
             XCTAssertEqual(InkConverter.tool(InkConverter.inkType(tool)), tool)
@@ -26,7 +38,7 @@ final class InkConverterTests: XCTestCase {
         for original in sample() {
             let once = InkConverter.stroke(from: InkConverter.pkStroke(original), id: original.id)
             let twice = InkConverter.stroke(from: InkConverter.pkStroke(once), id: original.id)
-            XCTAssertEqual(twice.points, once.points)
+            assertSamePoints(twice.points, once.points)
             XCTAssertEqual(twice.mask, once.mask)
             XCTAssertEqual(twice.transform, once.transform)
             XCTAssertEqual(twice.identityKey, once.identityKey)
@@ -36,7 +48,7 @@ final class InkConverterTests: XCTestCase {
             page.strokes = [once]
             let stored = try PageCodec.decode(try PageCodec.encode(page)).strokes[0]
             let reloaded = InkConverter.stroke(from: InkConverter.pkStroke(stored), id: stored.id)
-            XCTAssertEqual(reloaded.points, stored.points)
+            assertSamePoints(reloaded.points, stored.points)
             XCTAssertEqual(reloaded.mask, stored.mask)
             XCTAssertEqual(reloaded.identityKey, once.identityKey)
         }

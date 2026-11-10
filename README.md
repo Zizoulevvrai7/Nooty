@@ -97,7 +97,7 @@ swift test --package-path Packages/NootyCore
 | Fonds blanc, ligné, quadrillé, pointillé | Implémenté | Non | Couleurs et espacement fixes |
 | Enregistrement local, réouverture | Implémenté | Tests sur simulateur | Une modification faite moins de 0,3 s avant un arrêt brutal peut être perdue |
 | Format ouvert versionné et validé | Implémenté | Tests unitaires | Un seul fichier par page, réécrit en entier |
-| Conversion PencilKit ↔ format sans dérive | Implémenté | Tests sur simulateur | PencilKit arrondit lui-même pression et opacité et convertit les courbes du masque en segments ; Nooty conserve ensuite exactement ces valeurs. Couleur au 1/255 |
+| Conversion PencilKit ↔ format sans dérive | Implémenté | Tests sur simulateur | PencilKit arrondit lui-même pression et opacité et convertit les courbes du masque en segments ; Nooty conserve ensuite exactement ces valeurs, sauf l'inclinaison, qui oscille de 0,001° d'un passage à l'autre. Couleur au 1/255 |
 | Export de la page | Implémenté | Non | Fichier JSON natif ; pas de PDF |
 | Diagnostic et test de charge 5 000 traits | Implémenté | Non | — |
 | Interface en français, structure de traduction | Implémenté | Non | Une seule langue |
