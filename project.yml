@@ -62,7 +62,27 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: io.github.nooty.notes.tests
         TARGETED_DEVICE_FAMILY: "2"
+  NootyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Nooty
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.nooty.notes.uitests
+        TARGETED_DEVICE_FAMILY: "2"
 schemes:
+  NootyUITests:
+    build:
+      targets:
+        Nooty: all
+        NootyUITests: [test]
+    test:
+      targets:
+        - NootyUITests
   Nooty:
     build:
       targets:

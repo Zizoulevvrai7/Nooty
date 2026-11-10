@@ -44,6 +44,7 @@ jobs:
           print(ids[-1])
           ')
           echo "Simulateur : $UDID"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
           set -o pipefail
           xcodebuild test -project Nooty.xcodeproj -scheme Nooty -destination "id=$UDID" \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log \
@@ -64,3 +65,27 @@ jobs:
           name: Nooty-ipa
           path: Nooty.ipa
           retention-days: 30
+
+      # Contrôle visuel : captures des écrans principaux, publiées dans le journal.
+      # Ne bloque jamais la production de l'IPA.
+      - name: Captures d'écran (simulateur iPad)
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          xcodebuild test -project Nooty.xcodeproj -scheme NootyUITests -destination "id=$UDID" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | grep -E "error:|Test Case .*(passed|failed)|\*\* TEST" || true
+          for f in /tmp/nooty-captures/*.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 40 -Z 1000 "$f" --out "${f%.png}.jpg" > /dev/null
+            echo "=====CAPTURE $(basename "${f%.png}")====="
+            base64 -i "${f%.png}.jpg" | fold -w 120
+            echo "=====FIN====="
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Nooty-captures
+          path: /tmp/nooty-captures/*.png
+          if-no-files-found: ignore
+          retention-days: 14
