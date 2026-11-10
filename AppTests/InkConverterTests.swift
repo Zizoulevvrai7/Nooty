@@ -13,14 +13,15 @@ final class InkConverterTests: XCTestCase {
         return strokes
     }
 
-    /// Égalité exacte de tous les champs, sauf l'inclinaison : PencilKit la stocke avec une
-    /// précision réduite et elle oscille d'environ 2·10⁻⁵ rad (0,001°) d'un passage à l'autre.
+    /// Égalité à la précision du fichier (Float32) de tous les champs, sauf l'inclinaison :
+    /// PencilKit la stocke avec une précision réduite et elle oscille d'environ 2·10⁻⁵ rad (0,001°).
     private func assertSamePoints(_ a: [InkPoint], _ b: [InkPoint], file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(a.count, b.count, file: file, line: line)
+        func f32(_ p: InkPoint) -> [Float32] {
+            [p.x, p.y, p.timeOffset, p.width, p.height, p.opacity, p.force, p.azimuth, p.secondaryScale].map { Float32($0) }
+        }
         for (p, q) in zip(a, b) {
-            var p2 = p
-            p2.altitude = q.altitude
-            XCTAssertEqual(p2, q, file: file, line: line)
+            XCTAssertEqual(f32(p), f32(q), file: file, line: line)
             XCTAssertEqual(p.altitude, q.altitude, accuracy: 1e-4, file: file, line: line)
         }
     }
