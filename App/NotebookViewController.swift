@@ -235,7 +235,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     // MARK: - Disposition et défilement
 
     private func updateContentSize() {
-        canvas.contentSize = CGSize(width: layout.width * canvas.zoomScale, height: layout.height * canvas.zoomScale)
+        canvas.contentSize = CGSize(width: CGFloat(layout.width) * canvas.zoomScale, height: CGFloat(layout.height) * canvas.zoomScale)
     }
 
     private func updateInsets() {
@@ -249,7 +249,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     private func fitWidth() {
         guard layout.width > 0 else { return }
-        let target = (view.bounds.width - 24) / layout.width
+        let target = (view.bounds.width - 24) / CGFloat(layout.width)
         canvas.setZoomScale(min(canvas.maximumZoomScale, max(canvas.minimumZoomScale, target)), animated: false)
         updateContentSize()
         updateInsets()
@@ -271,7 +271,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     private func scrollToPage(_ index: Int, animated: Bool) {
         guard layout.frames.indices.contains(index) else { return }
-        let y = layout.frames[index].y * canvas.zoomScale - canvas.contentInset.top
+        let y = CGFloat(layout.frames[index].y) * canvas.zoomScale - canvas.contentInset.top
         let maxY = max(-canvas.contentInset.top, canvas.contentSize.height + canvas.contentInset.bottom - canvas.bounds.height)
         canvas.setContentOffset(CGPoint(x: -canvas.contentInset.left, y: min(max(y, -canvas.contentInset.top), maxY)), animated: animated)
     }
@@ -452,8 +452,8 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     private func makeThumbnail() -> UIImage? {
         guard let frame = layout.frames.first, let info = manifest.pages.first, frame.width > 0 else { return nil }
         let width: CGFloat = 336
-        let scale = width / frame.width
-        let size = CGSize(width: width, height: (frame.height * scale).rounded())
+        let scale = width / CGFloat(frame.width)
+        let size = CGSize(width: width, height: (CGFloat(frame.height) * scale).rounded())
         let pageRect = CGRect(x: frame.x, y: frame.y, width: frame.width, height: frame.height)
         var ink: UIImage?
         UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
