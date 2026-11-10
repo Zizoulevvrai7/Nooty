@@ -118,7 +118,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
 
     // MARK: - Contenu
 
-    private func currentItems() -> [LibraryItem] {
+    private func currentItems() -> [LibraryEntry] {
         switch scope {
         case .documents: return store.index.children(of: folderID, sort: sort)
         case .favorites: return store.index.favorites(sort: sort)
@@ -145,7 +145,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
         configureBarButtons(hasItems: !items.isEmpty)
     }
 
-    private func thumbnail(for item: LibraryItem) -> UIImage? {
+    private func thumbnail(for item: LibraryEntry) -> UIImage? {
         guard item.kind == .notebook else { return nil }
         let key = "\(item.id.uuidString)-\(item.updatedAt)" as NSString
         if let cached = thumbnails.object(forKey: key) { return cached }
@@ -193,7 +193,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
         open(item)
     }
 
-    private func open(_ item: LibraryItem) {
+    private func open(_ item: LibraryEntry) {
         switch item.kind {
         case .folder:
             navigationController?.pushViewController(LibraryViewController(store: store, folderID: item.id), animated: true)
@@ -215,7 +215,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
 
     // MARK: - Actions
 
-    private func menu(for item: LibraryItem) -> UIMenu {
+    private func menu(for item: LibraryEntry) -> UIMenu {
         let id = item.id
         if scope == .trash {
             return UIMenu(children: [
@@ -292,7 +292,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
         present(alert, animated: true)
     }
 
-    private func promptRename(_ item: LibraryItem) {
+    private func promptRename(_ item: LibraryEntry) {
         promptText(title: L("item.rename"), initial: item.title, placeholder: L("library.namePlaceholder"), confirm: L("common.save")) { [weak self] text in
             self?.store.mutate { $0.rename(item.id, to: text, now: nowMs()) }
         }
@@ -321,7 +321,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
         present(nav, animated: true)
     }
 
-    private func confirmDeleteForever(_ item: LibraryItem) {
+    private func confirmDeleteForever(_ item: LibraryEntry) {
         let alert = UIAlertController(title: L("trash.deleteForever"), message: L("trash.deleteMessage", item.title), preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: L("common.cancel"), style: .cancel))
         alert.addAction(UIAlertAction(title: L("common.delete"), style: .destructive) { [weak self] _ in self?.store.deletePermanently(item.id) })

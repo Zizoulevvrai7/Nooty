@@ -121,7 +121,7 @@ final class LibraryCell: UICollectionViewCell {
         preview.image = nil
     }
 
-    func configure(_ item: LibraryItem, thumbnail: UIImage?, childCount: Int, trashed: Bool) {
+    func configure(_ item: LibraryEntry, thumbnail: UIImage?, childCount: Int, trashed: Bool) {
         let color = InkConverter.uiColor(item.color)
         let isFolder = item.kind == .folder
         cover.isHidden = isFolder

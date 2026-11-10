@@ -58,7 +58,7 @@ final class LibraryStore {
         for (n, dir) in dirs.enumerated() {
             guard let id = UUID(uuidString: dir.lastPathComponent),
                   FileManager.default.fileExists(atPath: dir.appendingPathComponent("carnet.json").path) else { continue }
-            index.add(LibraryItem(
+            index.add(LibraryEntry(
                 id: id, kind: .notebook, title: index.uniqueTitle(L("library.recovered"), in: nil),
                 createdAt: nowMs(), color: Theme.coverColors[n % Theme.coverColors.count]
             ))
@@ -86,16 +86,16 @@ final class LibraryStore {
     }
 
     @discardableResult
-    func createFolder(title: String, parent: UUID?) -> LibraryItem {
+    func createFolder(title: String, parent: UUID?) -> LibraryEntry {
         let clean = LibraryIndex.normalizedTitle(title) ?? L("library.newFolder")
-        let item = LibraryItem(kind: .folder, parentID: parent, title: index.uniqueTitle(clean, in: parent), createdAt: nowMs(), color: nextColor())
+        let item = LibraryEntry(kind: .folder, parentID: parent, title: index.uniqueTitle(clean, in: parent), createdAt: nowMs(), color: nextColor())
         mutate { $0.add(item) }
         return item
     }
 
-    func createNotebook(title: String, parent: UUID?, background: Background) throws -> LibraryItem {
+    func createNotebook(title: String, parent: UUID?, background: Background) throws -> LibraryEntry {
         let clean = LibraryIndex.normalizedTitle(title) ?? L("library.untitled")
-        let item = LibraryItem(kind: .notebook, parentID: parent, title: index.uniqueTitle(clean, in: parent), createdAt: nowMs(), color: nextColor())
+        let item = LibraryEntry(kind: .notebook, parentID: parent, title: index.uniqueTitle(clean, in: parent), createdAt: nowMs(), color: nextColor())
         let manifest = NotebookManifest(id: item.id, pages: [PageInfo(background: background)], updatedAt: nowMs())
         try NotebookStore.create(directory: notebookDirectory(item.id), manifest: manifest)
         mutate { $0.add(item) }
@@ -104,7 +104,7 @@ final class LibraryStore {
 
     func duplicateNotebook(_ id: UUID) throws {
         guard let source = index.item(id), source.kind == .notebook else { return }
-        let copy = LibraryItem(
+        let copy = LibraryEntry(
             kind: .notebook, parentID: source.parentID,
             title: index.uniqueTitle(L("library.copyOf", source.title), in: source.parentID),
             createdAt: nowMs(), color: source.color
@@ -130,7 +130,7 @@ final class LibraryStore {
               let docs = try? fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false) else { return }
         let old = docs.appendingPathComponent("Prototype/page.nooty.json")
         guard let data = try? Data(contentsOf: old), var page = try? PageCodec.decode(data), page.strokes.count < 2000 else { return }
-        let item = LibraryItem(kind: .notebook, title: L("library.prototype"), createdAt: nowMs(), color: Theme.coverColors[0])
+        let item = LibraryEntry(kind: .notebook, title: L("library.prototype"), createdAt: nowMs(), color: Theme.coverColors[0])
         page.id = UUID()
         let info = PageInfo(id: page.id, width: page.width, height: page.height, background: page.background)
         do {

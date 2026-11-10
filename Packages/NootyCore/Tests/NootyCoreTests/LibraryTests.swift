@@ -2,12 +2,12 @@ import XCTest
 @testable import NootyCore
 
 final class LibraryTests: XCTestCase {
-    private func folder(_ title: String, in parent: UUID? = nil, at t: Double = 0) -> LibraryItem {
-        LibraryItem(kind: .folder, parentID: parent, title: title, createdAt: t)
+    private func folder(_ title: String, in parent: UUID? = nil, at t: Double = 0) -> LibraryEntry {
+        LibraryEntry(kind: .folder, parentID: parent, title: title, createdAt: t)
     }
 
-    private func notebook(_ title: String, in parent: UUID? = nil, at t: Double = 0) -> LibraryItem {
-        LibraryItem(kind: .notebook, parentID: parent, title: title, createdAt: t)
+    private func notebook(_ title: String, in parent: UUID? = nil, at t: Double = 0) -> LibraryEntry {
+        LibraryEntry(kind: .notebook, parentID: parent, title: title, createdAt: t)
     }
 
     func testChildrenAreScopedSortedAndFoldersFirst() {

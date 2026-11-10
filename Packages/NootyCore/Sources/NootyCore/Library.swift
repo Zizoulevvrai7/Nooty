@@ -1,13 +1,13 @@
 import Foundation
 
-public enum LibraryItemKind: String, Sendable {
+public enum LibraryEntryKind: String, Sendable {
     case folder, notebook
 }
 
 /// Entrée de la bibliothèque : un dossier ou un carnet.
-public struct LibraryItem: Identifiable, Equatable, Sendable {
+public struct LibraryEntry: Identifiable, Equatable, Sendable {
     public var id: UUID
-    public var kind: LibraryItemKind
+    public var kind: LibraryEntryKind
     /// Dossier parent ; nil à la racine.
     public var parentID: UUID?
     public var title: String
@@ -21,7 +21,7 @@ public struct LibraryItem: Identifiable, Equatable, Sendable {
     public var trashedAt: Double?
 
     public init(
-        id: UUID = UUID(), kind: LibraryItemKind, parentID: UUID? = nil, title: String,
+        id: UUID = UUID(), kind: LibraryEntryKind, parentID: UUID? = nil, title: String,
         createdAt: Double, updatedAt: Double? = nil, favorite: Bool = false,
         color: RGBA = .ink, trashedAt: Double? = nil
     ) {
@@ -46,14 +46,14 @@ public struct LibraryIndex: Equatable, Sendable {
     public static let maxTitleLength = 120
     public static let maxItems = 100_000
 
-    public private(set) var items: [LibraryItem]
+    public private(set) var items: [LibraryEntry]
 
-    public init(items: [LibraryItem] = []) {
+    public init(items: [LibraryEntry] = []) {
         self.items = items
         repair()
     }
 
-    public func item(_ id: UUID) -> LibraryItem? {
+    public func item(_ id: UUID) -> LibraryEntry? {
         items.first { $0.id == id }
     }
 
@@ -87,8 +87,8 @@ public struct LibraryIndex: Equatable, Sendable {
     }
 
     /// Chemin depuis la racine jusqu'au parent de l'élément (dossiers ancêtres).
-    public func ancestors(of id: UUID) -> [LibraryItem] {
-        var out: [LibraryItem] = []
+    public func ancestors(of id: UUID) -> [LibraryEntry] {
+        var out: [LibraryEntry] = []
         var current = item(id)?.parentID.flatMap(item)
         while let it = current, out.count <= items.count {
             out.insert(it, at: 0)
@@ -97,7 +97,7 @@ public struct LibraryIndex: Equatable, Sendable {
         return out
     }
 
-    private func sorted(_ list: [LibraryItem], by sort: LibrarySort) -> [LibraryItem] {
+    private func sorted(_ list: [LibraryEntry], by sort: LibrarySort) -> [LibraryEntry] {
         list.sorted { a, b in
             if a.kind != b.kind { return a.kind == .folder }
             switch sort {
@@ -114,21 +114,21 @@ public struct LibraryIndex: Equatable, Sendable {
     }
 
     /// Contenu d'un dossier (ou de la racine), hors corbeille, dossiers en premier.
-    public func children(of parent: UUID?, sort: LibrarySort = .name) -> [LibraryItem] {
+    public func children(of parent: UUID?, sort: LibrarySort = .name) -> [LibraryEntry] {
         sorted(items.filter { $0.parentID == parent && $0.trashedAt == nil }, by: sort)
     }
 
-    public func favorites(sort: LibrarySort = .name) -> [LibraryItem] {
+    public func favorites(sort: LibrarySort = .name) -> [LibraryEntry] {
         sorted(items.filter { $0.favorite && !isEffectivelyTrashed($0.id) }, by: sort)
     }
 
     /// Éléments mis directement à la corbeille (leur contenu les suit sans être listé).
-    public func trashed() -> [LibraryItem] {
+    public func trashed() -> [LibraryEntry] {
         items.filter { $0.trashedAt != nil }.sorted { ($0.trashedAt ?? 0) > ($1.trashedAt ?? 0) }
     }
 
     /// Dossiers pouvant recevoir l'élément : ni lui-même, ni ses descendants, ni la corbeille.
-    public func moveTargets(for id: UUID) -> [LibraryItem] {
+    public func moveTargets(for id: UUID) -> [LibraryEntry] {
         let excluded = Set(descendants(of: id) + [id])
         return sorted(items.filter { $0.kind == .folder && !excluded.contains($0.id) && !isEffectivelyTrashed($0.id) }, by: .name)
     }
@@ -152,7 +152,7 @@ public struct LibraryIndex: Equatable, Sendable {
     // MARK: - Modifications
 
     @discardableResult
-    public mutating func add(_ item: LibraryItem) -> Bool {
+    public mutating func add(_ item: LibraryEntry) -> Bool {
         guard indexOf(item.id) == nil, items.count < Self.maxItems else { return false }
         var copy = item
         if let parent = copy.parentID, self.item(parent)?.kind != .folder { copy.parentID = nil }
@@ -246,7 +246,7 @@ public enum LibraryCodec {
     public static let maxBytes = 64 * 1024 * 1024
 
     public static func encode(_ index: LibraryIndex) throws -> Data {
-        let file = LibraryFileDTO(format: format, schemaVersion: NootyFormat.schemaVersion, items: index.items.map(LibraryItemDTO.init))
+        let file = LibraryFileDTO(format: format, schemaVersion: NootyFormat.schemaVersion, items: index.items.map(LibraryEntryDTO.init))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try encoder.encode(file)
@@ -262,7 +262,7 @@ public enum LibraryCodec {
         }
         try require(file.items.count <= LibraryIndex.maxItems, "trop d’éléments")
         var seen = Set<UUID>()
-        let items: [LibraryItem] = try file.items.map { dto in
+        let items: [LibraryEntry] = try file.items.map { dto in
             let item = try dto.validated()
             try require(seen.insert(item.id).inserted, "identifiant en double")
             return item
@@ -274,10 +274,10 @@ public enum LibraryCodec {
 struct LibraryFileDTO: Codable {
     var format: String
     var schemaVersion: Int
-    var items: [LibraryItemDTO]
+    var items: [LibraryEntryDTO]
 }
 
-struct LibraryItemDTO: Codable {
+struct LibraryEntryDTO: Codable {
     var id: String
     var kind: String
     var parentID: String?
@@ -288,7 +288,7 @@ struct LibraryItemDTO: Codable {
     var color: String
     var trashedAt: Double?
 
-    init(_ i: LibraryItem) {
+    init(_ i: LibraryEntry) {
         id = i.id.uuidString
         kind = i.kind.rawValue
         parentID = i.parentID?.uuidString
@@ -300,9 +300,9 @@ struct LibraryItemDTO: Codable {
         trashedAt = i.trashedAt
     }
 
-    func validated() throws -> LibraryItem {
+    func validated() throws -> LibraryEntry {
         guard let uuid = UUID(uuidString: id) else { throw FormatError.invalid("identifiant") }
-        guard let itemKind = LibraryItemKind(rawValue: kind) else { throw FormatError.invalid("type d’élément") }
+        guard let itemKind = LibraryEntryKind(rawValue: kind) else { throw FormatError.invalid("type d’élément") }
         guard let cleanTitle = LibraryIndex.normalizedTitle(title) else { throw FormatError.invalid("titre") }
         guard let rgba = RGBA(hex: color) else { throw FormatError.invalid("couleur") }
         var parent: UUID?
@@ -312,7 +312,7 @@ struct LibraryItemDTO: Codable {
         }
         try require(createdAt.isFinite && createdAt >= 0 && updatedAt.isFinite && updatedAt >= 0, "dates")
         if let trashedAt { try require(trashedAt.isFinite && trashedAt >= 0, "date de corbeille") }
-        return LibraryItem(
+        return LibraryEntry(
             id: uuid, kind: itemKind, parentID: parent, title: cleanTitle, createdAt: createdAt,
             updatedAt: updatedAt, favorite: favorite, color: rgba, trashedAt: trashedAt
         )
