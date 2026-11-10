@@ -14,8 +14,11 @@ puis signée et installée depuis un PC Windows avec Sideloadly.
 1. Onglet **Actions** du dépôt → dernière exécution réussie du workflow **iOS**.
 2. En bas de la page, section *Artifacts* : télécharger **Nooty-ipa**, puis le dézipper pour obtenir `Nooty.ipa`.
 3. iPad branché au PC, ouvrir Sideloadly, glisser `Nooty.ipa`, saisir l'identifiant Apple, lancer.
-4. Première fois seulement, sur l'iPad : *Réglages → Général → VPN et gestion de l'appareil* → faire confiance au profil.
-   Si iPadOS le demande, activer aussi *Réglages → Confidentialité et sécurité → Mode développeur*.
+4. Première fois seulement, sur l'iPad, dans cet ordre :
+   - *Réglages → Confidentialité et sécurité*, tout en bas, section *Sécurité* → **Mode développeur** → activer,
+     redémarrer, puis confirmer *Activer*. Cette option n'apparaît qu'**après** une première installation
+     par Sideloadly, et seulement sous iPadOS 16 ou plus récent.
+   - *Réglages → Général → VPN et gestion de l'appareil* → toucher l'identifiant Apple → *Faire confiance*.
 
 Avec un identifiant Apple gratuit, l'application cesse de s'ouvrir au bout de 7 jours.
 **Réinstaller la nouvelle version par-dessus conserve les notes. Ne jamais supprimer l'application :
