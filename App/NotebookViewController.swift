@@ -13,7 +13,8 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     private let canvas = PKCanvasView()
     private let pagesView = PagesBackgroundView()
     private let toolStrip: ToolStripView
-    private let pageLabel = PaddedLabel()
+    private let pageLabel = UILabel()
+    private let pagePill = UIView()
     private var undoItem: UIBarButtonItem!
     private var redoItem: UIBarButtonItem!
 
@@ -98,15 +99,25 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         toolStrip.onEditColor = { [weak self] index, color in self?.editColor(at: index, current: color) }
         view.addSubview(toolStrip)
 
+        // Indicateur de page : une pastille qui contient le texte, dimensionnée par ses contraintes.
         pageLabel.translatesAutoresizingMaskIntoConstraints = false
-        pageLabel.font = .preferredFont(forTextStyle: .footnote)
-        pageLabel.adjustsFontForContentSizeCategory = true
         pageLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: 13, weight: .semibold))
+        pageLabel.adjustsFontForContentSizeCategory = true
         pageLabel.textColor = .white
-        pageLabel.backgroundColor = Theme.ink.withAlphaComponent(0.82)
-        pageLabel.layer.cornerRadius = 13
-        pageLabel.layer.masksToBounds = true
-        view.addSubview(pageLabel)
+        pageLabel.text = L("page.position", 1, manifest.pages.count)
+        pagePill.translatesAutoresizingMaskIntoConstraints = false
+        pagePill.backgroundColor = Theme.ink.withAlphaComponent(0.82)
+        pagePill.layer.cornerRadius = 13
+        pagePill.layer.cornerCurve = .continuous
+        pagePill.isUserInteractionEnabled = false
+        pagePill.addSubview(pageLabel)
+        view.addSubview(pagePill)
+        NSLayoutConstraint.activate([
+            pageLabel.topAnchor.constraint(equalTo: pagePill.topAnchor, constant: 5),
+            pageLabel.bottomAnchor.constraint(equalTo: pagePill.bottomAnchor, constant: -5),
+            pageLabel.leadingAnchor.constraint(equalTo: pagePill.leadingAnchor, constant: 12),
+            pageLabel.trailingAnchor.constraint(equalTo: pagePill.trailingAnchor, constant: -12),
+        ])
 
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
@@ -114,8 +125,8 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
             toolStrip.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             toolStrip.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 10),
             toolStrip.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -10),
-            pageLabel.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
-            pageLabel.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -12),
+            pagePill.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
+            pagePill.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -12),
         ])
 
         undoItem = UIBarButtonItem(title: L("action.undo"), image: UIImage(systemName: "arrow.uturn.backward"), primaryAction: UIAction { [weak self] _ in
@@ -420,10 +431,10 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
             savedGeneration = max(savedGeneration, generation)
             if saveErrorShown {
                 saveErrorShown = false
-                pageLabel.backgroundColor = Theme.ink.withAlphaComponent(0.82)
+                pagePill.backgroundColor = Theme.ink.withAlphaComponent(0.82)
             }
         case let .failure(error):
-            pageLabel.backgroundColor = .systemRed
+            pagePill.backgroundColor = .systemRed
             guard !saveErrorShown, presentedViewController == nil, view.window != nil else { return }
             saveErrorShown = true
             let alert = UIAlertController(title: L("common.error"), message: L("save.error", error.localizedDescription), preferredStyle: .alert)
@@ -461,18 +472,5 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
             PaperRenderer.draw(info.background, pageRect: rect, scale: scale, clip: rect, in: context.cgContext)
             ink?.draw(in: rect)
         }
-    }
-}
-
-final class PaddedLabel: UILabel {
-    var insets = UIEdgeInsets(top: 6, left: 10, bottom: 6, right: 10)
-
-    override func drawText(in rect: CGRect) {
-        super.drawText(in: rect.inset(by: insets))
-    }
-
-    override var intrinsicContentSize: CGSize {
-        let s = super.intrinsicContentSize
-        return CGSize(width: s.width + insets.left + insets.right, height: s.height + insets.top + insets.bottom)
     }
 }

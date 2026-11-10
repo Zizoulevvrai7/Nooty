@@ -25,6 +25,9 @@ final class ScreenshotTests: XCTestCase {
         app.buttons["Créer"].tap()
         XCTAssertTrue(app.buttons["Stylo"].waitForExistence(timeout: 20))
         sleep(1)
+        let position = app.staticTexts["1 sur 1"]
+        XCTAssertTrue(position.exists, "l’indicateur de page doit afficher « 1 sur 1 »")
+        XCTAssertGreaterThan(position.frame.width, 30)
         capture("3-editeur-stylo")
 
         app.buttons["Gomme"].tap()
