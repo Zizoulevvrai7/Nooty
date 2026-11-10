@@ -1,46 +1,109 @@
+"app.name" = "Nooty";
+
+/* Commun */
+"common.ok" = "OK";
+"common.cancel" = "Annuler";
+"common.create" = "Créer";
+"common.save" = "Enregistrer";
+"common.delete" = "Supprimer";
+"common.error" = "Erreur";
+"save.error" = "Échec de l’enregistrement : %@";
+"storage.unavailable" = "Le stockage de l’application est inaccessible.\n%@";
+
+/* Bibliothèque */
+"library.title" = "Documents";
+"library.documents" = "Documents";
+"library.favorites" = "Favoris";
+"library.trash" = "Corbeille";
+"library.new" = "Nouveau";
+"library.newNotebook" = "Bloc-notes";
+"library.newFolder" = "Dossier";
+"library.untitled" = "Bloc-notes sans titre";
+"library.namePlaceholder" = "Nom";
+"library.copyOf" = "%@ (copie)";
+"library.recovered" = "Bloc-notes retrouvé";
+"library.prototype" = "Page du prototype";
+"library.rebuilt" = "L’index de la bibliothèque était illisible. Il a été reconstruit à partir des blocs-notes présents ; les noms et les dossiers sont à refaire. Ancien index conservé : %@";
+"library.empty" = "Aucun document.\nTouchez « Nouveau » pour créer votre premier bloc-notes.";
+"library.emptyFolder" = "Ce dossier est vide.";
+"library.emptyFavorites" = "Aucun favori.";
+"library.emptyTrash" = "La corbeille est vide.";
+"library.actions" = "Actions";
+"library.folder" = "Dossier";
+"library.notebook" = "Bloc-notes";
+"library.favorite" = "favori";
+"library.oneItem" = "1 élément";
+"library.items" = "%d éléments";
+"sort.title" = "Trier";
+"sort.modified" = "Date de modification";
+"sort.created" = "Date de création";
+"sort.name" = "Nom";
+"item.rename" = "Renommer";
+"item.favorite" = "Ajouter aux favoris";
+"item.unfavorite" = "Retirer des favoris";
+"item.duplicate" = "Dupliquer";
+"item.move" = "Déplacer vers";
+"item.color" = "Couleur";
+"item.trash" = "Mettre à la corbeille";
+"trash.restore" = "Restaurer";
+"trash.deleteForever" = "Supprimer définitivement";
+"trash.deleteMessage" = "« %@ » et son contenu seront effacés. Cette action est irréversible.";
+"trash.empty" = "Vider la corbeille";
+"trash.emptyMessage" = "Tous les éléments de la corbeille seront effacés. Cette action est irréversible.";
+"trash.openHint" = "Restaurez cet élément pour l’ouvrir.";
+
+/* Nouveau bloc-notes */
+"new.title" = "Nouveau bloc-notes";
+"new.name" = "Nom";
+"new.paper" = "Modèle de papier";
+"new.paperColor" = "Couleur du papier";
+"paper.seyes" = "Seyès";
+"paper.ruled" = "Ligné";
+"paper.grid" = "Quadrillé";
+"paper.dots" = "Pointillé";
+"paper.blank" = "Vierge";
+"paperColor.white" = "Blanc";
+"paperColor.ivory" = "Ivoire";
+"paperColor.yellow" = "Jaune";
+
 /* Éditeur */
-"canvas.label" = "Page de notes";
+"canvas.label" = "Pages du bloc-notes";
+"notebook.openFailed" = "Impossible d’ouvrir ce bloc-notes : %@";
+"notebook.damaged" = "%d page(s) illisible(s) : leur fichier a été mis de côté et la page est affichée vide.";
 "action.undo" = "Annuler";
 "action.redo" = "Rétablir";
-"action.fingerDraws" = "Dessiner au doigt";
-"action.fit" = "Ajuster à la largeur";
 "action.more" = "Options";
-"common.on" = "activé";
-"common.off" = "désactivé";
-"common.cancel" = "Annuler";
+"action.fit" = "Ajuster à la largeur";
+"action.fingerDraws" = "Dessiner au doigt";
+"page.add" = "Ajouter une page";
+"page.addAfter" = "Après cette page";
+"page.addBefore" = "Avant cette page";
+"page.addLast" = "À la fin";
+"page.template" = "Modèle de cette page";
+"page.delete" = "Supprimer cette page";
+"page.deleteTitle" = "Supprimer la page %d ?";
+"page.deleteMessage" = "Son contenu sera effacé. Cette action ne peut pas être annulée.";
+"page.position" = "%d sur %d";
 
-/* Menu */
-"menu.background" = "Fond de page";
-"bg.blank" = "Blanc";
-"bg.ruled" = "Ligné";
-"bg.grid" = "Quadrillé";
-"bg.dots" = "Pointillé";
-"menu.diagnostics" = "Afficher le diagnostic";
-"menu.export" = "Exporter la page";
-"menu.stress" = "Test de charge : 5 000 traits";
-"menu.clear" = "Effacer la page";
-"clear.title" = "Effacer la page ?";
-"clear.message" = "Tous les traits seront supprimés. Vous pourrez annuler.";
-"clear.confirm" = "Effacer";
-
-/* Enregistrement */
-"save.saved" = "Enregistré";
-"save.saving" = "Enregistrement…";
-"save.error" = "Échec de l’enregistrement : %@";
-"save.unavailable" = "Stockage indisponible : rien ne sera conservé";
-"load.failed" = "Page illisible (%@). Fichier mis de côté : %@";
-
-/* Diagnostic */
-"diag.strokes" = "Traits";
-"diag.points" = "Points";
-"diag.lastTool" = "Dernier outil";
-"diag.force" = "Pression";
-"diag.altitude" = "Inclinaison";
-"diag.lastPoints" = "Points du trait";
-"diag.save" = "Enregistrement";
-"diag.size" = "Taille";
-"diag.load" = "Chargement";
-"diag.zoom" = "Zoom";
-"diag.input" = "Saisie";
-"diag.input.pencil" = "stylet seul";
-"diag.input.any" = "stylet et doigt";
+/* Outils */
+"tools.label" = "Outils";
+"tool.pen" = "Stylo";
+"tool.highlighter" = "Surligneur";
+"tool.eraser" = "Gomme";
+"tool.lasso" = "Lasso";
+"pen.style" = "Type de stylo";
+"pen.ball" = "Bille";
+"pen.fountain" = "Plume";
+"pen.brush" = "Pinceau";
+"width.fine" = "Trait fin";
+"width.medium" = "Trait moyen";
+"width.thick" = "Trait épais";
+"color.slot" = "Couleur %d";
+"color.editHint" = "Touchez à nouveau pour changer cette couleur.";
+"eraser.mode" = "Mode de la gomme";
+"eraser.stroke" = "Trait entier";
+"eraser.precise" = "Précision";
+"eraser.small" = "Petite gomme";
+"eraser.medium" = "Gomme moyenne";
+"eraser.large" = "Grande gomme";
+"lasso.hint" = "Entourez des traits, puis déplacez-les ou touchez la sélection.";

@@ -3,8 +3,9 @@
 Application iPad personnelle de prise de notes à l'Apple Pencil. Native (Swift, UIKit, PencilKit),
 local-first, sans compte ni abonnement. Code, format de fichier et identité visuelle indépendants.
 
-**État : phase 0, prototype d'écriture.** Une seule page, pour valider l'écriture et la chaîne
-compilation → installation avant de construire la bibliothèque et les carnets.
+**État : version 0.2.** Bibliothèque, blocs-notes multipages, modèles de papier (dont Seyès) et
+barre d'outils propre à Nooty. L'audio, la transcription, les images, le PDF et l'IA ne sont pas
+encore là.
 
 ## Installer sur l'iPad (sans Mac)
 
@@ -28,8 +29,8 @@ et l'option *Exporter la page* permet d'en garder une copie ailleurs.
 ## Architecture
 
 ```
-Packages/NootyCore/   modèle documentaire, format d'échange, validation, identités (Swift pur, sans UIKit)
-App/                  application iPad : éditeur PencilKit, stockage, fond de page, textes
+Packages/NootyCore/   modèle, formats de fichier, validation, bibliothèque, disposition des pages (Swift pur)
+App/                  application iPad : bibliothèque, éditeur, outils, stockage, papier, textes
 AppTests/             tests de l'application (conversion PencilKit, stockage), exécutés sur simulateur
 project.yml           description du projet Xcode, générée par XcodeGen
 .github/workflows/    compilation, tests et production de l'IPA
@@ -37,42 +38,37 @@ design/               icône source
 ```
 
 - **Encre** : PencilKit (moteur d'Apple) pour la latence, la pression, l'inclinaison et le rejet de paume.
-  Il fournit aussi les outils : stylos, surligneur, gomme par trait ou partielle, lasso, règle.
+  La palette d'Apple n'est plus affichée : les outils sont pilotés par la barre de Nooty.
 - **Format** : PencilKit n'est que le moteur. Chaque trait est converti dans le modèle de Nooty
-  avec toutes ses données (position, temps, taille, opacité, pression, orientation, inclinaison,
-  transformation, masque de gomme), et enregistré dans un format ouvert et versionné.
+  avec toutes ses données et enregistré dans un format ouvert et versionné.
+- **Pages** : toutes les pages d'un bloc-notes défilent sur une seule surface d'écriture. Un trait
+  appartient à la page qui contient son centre ; il est enregistré dans le repère de cette page.
 - **Identifiants stables** : PencilKit ne donne pas d'identité aux traits ; Nooty les reconnaît
   d'une sauvegarde à l'autre par une empreinte (graine, date, premier point, nombre de points).
-- **Enregistrement** : 0,3 s après chaque modification, sur une file de fond, en écriture atomique
-  (fichier temporaire puis renommage). Enregistrement forcé quand l'application passe en arrière-plan.
-  Un fichier illisible est mis de côté, jamais écrasé.
-- **Annuler / rétablir** : gestionnaire d'annulation de PencilKit ; effacer la page et le test de
-  charge sont aussi annulables.
+- **Enregistrement** : 0,3 s après chaque modification, sur une file de fond. Seules les pages
+  modifiées sont réécrites, en écriture atomique. Enregistrement forcé à la mise en arrière-plan
+  et à la fermeture du bloc-notes. Un fichier illisible est mis de côté, jamais écrasé.
+- **Annuler / rétablir** : gestionnaire d'annulation de PencilKit. Ajouter ou supprimer une page
+  vide cet historique.
 
-### Format de page (`page.nooty.json`, schéma 1)
+### Fichiers (dossier Documents de l'application, visible dans l'app Fichiers)
 
-```json
-{
-  "format": "nooty.page",
-  "schemaVersion": 1,
-  "page": {
-    "id": "UUID", "width": 595.28, "height": 841.89, "updatedAt": 1700000000000,
-    "background": { "kind": "ruled", "color": "#FFFDF8FF", "lineColor": "#C9D3E0FF", "spacing": 19.84 },
-    "strokes": [{
-      "id": "UUID", "tool": "pen", "color": "#1D2A44FF", "createdAt": 1700000000000,
-      "randomSeed": 123, "transform": [1, 0, 0, 1, 0, 0], "mask": null,
-      "pointComponents": 10, "points": "base64…"
-    }]
-  }
-}
+```
+Bibliotheque/bibliotheque.json              index : dossiers, blocs-notes, favoris, corbeille
+Bibliotheque/carnets/<id>/carnet.json       manifeste : ordre, taille et papier des pages
+Bibliotheque/carnets/<id>/pages/<id>.json   contenu d'une page
+Bibliotheque/carnets/<id>/miniature.png     aperçu, reconstructible
 ```
 
-Unités : points typographiques (1/72 pouce), origine en haut à gauche. Dates en millisecondes
-depuis 1970. `points` : base64 de Float32 petit-boutistes, 10 par point, dans l'ordre
+Les trois formats (`nooty.library`, `nooty.notebook`, `nooty.page`) portent un nom de format et
+une version de schéma, et sont validés à la lecture. L'index est reconstructible à partir des
+dossiers de blocs-notes.
+
+Page : unités en points typographiques (1/72 pouce), origine en haut à gauche, dates en
+millisecondes depuis 1970. `points` : base64 de Float32 petit-boutistes, 10 par point, dans l'ordre
 `x, y, temps (s depuis createdAt), largeur, hauteur, opacité, pression, orientation (rad),
 inclinaison (rad), échelle secondaire`. `mask` : liste `{op: m|l|q|c|z, p: [...]}`.
-À l'import, tout est validé : version, tailles (256 Mo, 200 000 traits, 100 000 points par trait),
-valeurs finies, couleurs, identifiants uniques.
+Limites à l'import : 256 Mo, 200 000 traits, 100 000 points par trait, 5 000 pages.
 
 ## Développement
 
@@ -90,36 +86,45 @@ swift test --package-path Packages/NootyCore
 
 ## Demandé / implémenté / testé / limites
 
+« Simulateur » : tests automatiques sur simulateur iPad. Rien n'a été vérifié sur un iPad réel
+tant que le protocole ci-dessous n'est pas fait.
+
 | Fonction | État | Testé | Limites |
 |---|---|---|---|
-| Écriture vectorielle PencilKit (pression, inclinaison) | Implémenté | Simulateur seulement | Pencil réel à tester |
-| Outils stylo, surligneur, gomme, lasso, règle, couleurs | Implémenté (sélecteur d'Apple) | Non | Interface d'Apple, pas encore la nôtre |
-| Stylet seul / doigt pour dessiner | Implémenté | Non | Rejet de paume : celui d'iPadOS |
-| Zoom et déplacement | Implémenté | Non | De 25 % à 600 % |
-| Annuler / rétablir | Implémenté | Non | Changer de fond n'est pas annulable |
-| Fonds blanc, ligné, quadrillé, pointillé | Implémenté | Non | Couleurs et espacement fixes |
-| Enregistrement local, réouverture | Implémenté | Tests sur simulateur | Une modification faite moins de 0,3 s avant un arrêt brutal peut être perdue |
-| Format ouvert versionné et validé | Implémenté | Tests unitaires | Un seul fichier par page, réécrit en entier |
-| Conversion PencilKit ↔ format sans dérive | Implémenté | Tests sur simulateur | PencilKit arrondit lui-même pression et opacité et convertit les courbes du masque en segments ; Nooty conserve ensuite exactement ces valeurs, sauf l'inclinaison, qui oscille de 0,001° d'un passage à l'autre. Couleur au 1/255 |
-| Export de la page | Implémenté | Non | Fichier JSON natif ; pas de PDF |
-| Diagnostic et test de charge 5 000 traits | Implémenté | Non | — |
-| Interface en français, structure de traduction | Implémenté | Non | Une seule langue |
-| Bibliothèque, carnets, PDF, audio, transcription, IA | Non implémenté | — | Phases suivantes |
+| Bibliothèque : dossiers et sous-dossiers, blocs-notes | Implémenté | Unitaire + simulateur (stockage) | Affichage en grille seulement |
+| Créer, renommer, déplacer, dupliquer, couleur | Implémenté | Unitaire | Dupliquer : blocs-notes seulement |
+| Corbeille, restauration, suppression définitive | Implémenté | Unitaire + simulateur | — |
+| Favoris, tri par nom, modification, création | Implémenté | Unitaire | — |
+| Recherche, documents récents, import, export | Non implémenté | — | — |
+| Nouveau bloc-notes : nom, modèle, couleur du papier | Implémenté | Non | Format A4 portrait uniquement |
+| Papiers Seyès, ligné, quadrillé, pointillé, vierge | Implémenté | Non | Espacements fixes |
+| Pages : ajouter avant, après, à la fin ; supprimer | Implémenté | Unitaire (disposition) | Pas de réorganisation ni de miniatures de pages |
+| Modèle indépendant par page | Implémenté | Non | — |
+| Reprise à la dernière page consultée | Implémenté | Unitaire (format) | Le zoom n'est pas mémorisé |
+| Stylos bille, plume, pinceau ; 3 épaisseurs ; 5 couleurs modifiables | Implémenté | Simulateur (outils valides) | Épaisseurs à régler d'après vos essais |
+| Surligneur | Implémenté | Non | — |
+| Gomme par trait entier ou de précision, 3 tailles | Implémenté | Non | — |
+| Lasso : déplacer, copier, supprimer | Implémenté (PencilKit) | Non | Pas de redimensionnement ni de rotation |
+| Stylet seul par défaut, option « dessiner au doigt » | Implémenté | Non | Rejet de paume : celui d'iPadOS |
+| Annuler / rétablir | Implémenté | Non | Historique vidé quand on ajoute ou supprime une page |
+| Enregistrement par page, récupération de fichiers abîmés | Implémenté | Simulateur | Une modification faite moins de 0,3 s avant un arrêt brutal peut être perdue |
+| Conversion PencilKit ↔ format sans dérive | Implémenté | Simulateur | Inclinaison stable à 0,001° près |
+| Miniature de couverture | Implémenté | Non | Première page seulement |
+| Onglets, formes, texte, images, PDF | Non implémenté | — | Versions suivantes |
+| Audio, export MP3, transcription, IA | Non implémenté | — | Versions suivantes |
 
 ## Protocole de test sur l'iPad
 
-Activer *Options → Afficher le diagnostic*, puis noter réussi ou échoué :
-
-1. La pression varie entre un trait léger et un trait appuyé (ligne « Pression »).
-2. L'inclinaison change quand le Pencil est penché (ligne « Inclinaison »).
-3. Vingt lignes d'écriture, paume posée : aucun trait parasite.
-4. Doigt pour déplacer et zoomer, Pencil pour écrire : aucune confusion sur 50 alternances.
-5. Deux cents mots écrits vite : aucun trait perdu ; écriture aussi agréable qu'ailleurs.
-6. Écriture de 3 mm de haut lisible.
-7. *Test de charge* : écrire, zoomer et déplacer restent fluides ; noter « Enregistrement » et « Taille ».
-8. Fermer l'application depuis le sélecteur d'apps juste après un trait, rouvrir : le trait est là.
-9. Réinstaller par Sideloadly : les notes sont toujours là.
-10. Mode avion : tout fonctionne.
+1. Créer un dossier, puis un bloc-notes Seyès dedans ; le renommer, le mettre en favori.
+2. Écrire avec les trois types de stylo et les trois épaisseurs ; dire lequel se rapproche le plus de votre réglage Goodnotes.
+3. Vingt lignes d'écriture, paume posée : aucun trait parasite. Doigt pour déplacer et zoomer.
+4. Surligneur, gomme « trait entier », gomme « précision », lasso.
+5. Changer une couleur : toucher deux fois la même pastille.
+6. Ajouter une page après, avant et à la fin ; écrire sur chacune ; supprimer celle du milieu : les autres gardent leur contenu.
+7. Revenir à la bibliothèque : la miniature montre la première page.
+8. Fermer l'application depuis le sélecteur d'apps juste après un trait, rouvrir : le trait est là, à la même page.
+9. Mettre le bloc-notes à la corbeille, le restaurer.
+10. Réinstaller par Sideloadly : tout est encore là. Mode avion : tout fonctionne.
 
 ## Dépendances et licences
 

@@ -133,8 +133,36 @@ struct PageDTO: Codable {
     var strokes: [StrokeDTO]
 }
 
-private func require(_ condition: Bool, _ what: @autoclosure () -> String) throws {
+func require(_ condition: Bool, _ what: @autoclosure () -> String) throws {
     if !condition { throw FormatError.invalid(what()) }
+}
+
+/// Vérifie l'en-tête commun à tous les fichiers Nooty avant toute analyse du contenu.
+func checkHeader(_ data: Data, format: String, maxBytes: Int, currentVersion: Int) throws {
+    guard data.count <= maxBytes else { throw FormatError.tooLarge }
+    let header: Header
+    do {
+        header = try JSONDecoder().decode(Header.self, from: data)
+    } catch {
+        throw FormatError.notNooty
+    }
+    guard header.format == format else { throw FormatError.notNooty }
+    guard header.schemaVersion >= 1 else { throw FormatError.invalid("version de schéma") }
+    guard header.schemaVersion <= currentVersion else { throw FormatError.unsupportedVersion(header.schemaVersion) }
+}
+
+extension BackgroundDTO {
+    init(_ b: Background) {
+        self.init(kind: b.kind.rawValue, color: b.color.hex, lineColor: b.lineColor.hex, spacing: b.spacing)
+    }
+
+    func validated() throws -> Background {
+        guard let kind = BackgroundKind(rawValue: kind),
+              let color = RGBA(hex: color),
+              let lineColor = RGBA(hex: lineColor) else { throw FormatError.invalid("fond de page") }
+        try require(spacing.isFinite && (2...500).contains(spacing), "espacement du fond")
+        return Background(kind: kind, color: color, lineColor: lineColor, spacing: spacing)
+    }
 }
 
 extension PageDTO {
@@ -142,10 +170,7 @@ extension PageDTO {
         id = page.id.uuidString
         width = page.width
         height = page.height
-        background = BackgroundDTO(
-            kind: page.background.kind.rawValue, color: page.background.color.hex,
-            lineColor: page.background.lineColor.hex, spacing: page.background.spacing
-        )
+        background = BackgroundDTO(page.background)
         updatedAt = page.updatedAt
         strokes = try page.strokes.map { s in
             StrokeDTO(
@@ -162,10 +187,7 @@ extension PageDTO {
         try require(height.isFinite && (10...20_000).contains(height), "hauteur de page")
         try require(updatedAt.isFinite && updatedAt >= 0, "date de modification")
         try require(strokes.count <= PageCodec.maxStrokes, "trop de traits")
-        guard let kind = BackgroundKind(rawValue: background.kind),
-              let color = RGBA(hex: background.color),
-              let lineColor = RGBA(hex: background.lineColor) else { throw FormatError.invalid("fond de page") }
-        try require(background.spacing.isFinite && (2...500).contains(background.spacing), "espacement du fond")
+        let bg = try background.validated()
 
         var seen = Set<UUID>()
         let parsed: [Stroke] = try strokes.map { dto in
@@ -175,7 +197,7 @@ extension PageDTO {
         }
         return Page(
             id: pageID, width: width, height: height,
-            background: Background(kind: kind, color: color, lineColor: lineColor, spacing: background.spacing),
+            background: bg,
             strokes: parsed, updatedAt: updatedAt
         )
     }

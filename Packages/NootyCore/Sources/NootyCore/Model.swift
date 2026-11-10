@@ -236,13 +236,30 @@ public struct Stroke: Identifiable, Equatable, Sendable {
 
 public enum BackgroundKind: String, CaseIterable, Sendable {
     case blank, ruled, grid, dots
+    /// Réglure Seyès (« grands carreaux ») : lignes principales tous les 8 mm,
+    /// trois interlignes fins, colonnes de 8 mm et marge rouge.
+    case seyes
+}
+
+/// Teinte du papier.
+public enum PaperColor: String, CaseIterable, Sendable {
+    case white, ivory, yellow
+
+    public var rgba: RGBA {
+        switch self {
+        case .white: return RGBA(r: 1, g: 1, b: 1)
+        case .ivory: return RGBA(r: 0xFB / 255, g: 0xF7 / 255, b: 0xEC / 255)
+        case .yellow: return RGBA(r: 0xFF / 255, g: 0xF6 / 255, b: 0xC9 / 255)
+        }
+    }
 }
 
 public struct Background: Equatable, Sendable {
     public var kind: BackgroundKind
     public var color: RGBA
+    /// Couleur des lignes principales.
     public var lineColor: RGBA
-    /// Espacement des lignes, en points typographiques.
+    /// Espacement des lignes principales, en points typographiques.
     public var spacing: Double
 
     public init(kind: BackgroundKind, color: RGBA, lineColor: RGBA, spacing: Double) {
@@ -254,13 +271,21 @@ public struct Background: Equatable, Sendable {
 
     public static let millimeter = 72 / 25.4
 
-    public static func standard(_ kind: BackgroundKind) -> Background {
-        Background(
-            kind: kind,
-            color: RGBA(r: 1, g: 0xFD / 255, b: 0xF8 / 255),
-            lineColor: RGBA(r: 0xC9 / 255, g: 0xD3 / 255, b: 0xE0 / 255),
-            spacing: (kind == .ruled ? 7 : 5) * millimeter
-        )
+    public static func standard(_ kind: BackgroundKind, paper: PaperColor = .white) -> Background {
+        let spacing: Double
+        let line: RGBA
+        switch kind {
+        case .ruled:
+            spacing = 7 * millimeter
+            line = RGBA(r: 0xB9 / 255, g: 0xC6 / 255, b: 0xDA / 255)
+        case .seyes:
+            spacing = 8 * millimeter
+            line = RGBA(r: 0x7D / 255, g: 0x83 / 255, b: 0xD8 / 255)
+        case .blank, .grid, .dots:
+            spacing = 5 * millimeter
+            line = RGBA(r: 0xB9 / 255, g: 0xC6 / 255, b: 0xDA / 255)
+        }
+        return Background(kind: kind, color: paper.rgba, lineColor: line, spacing: spacing)
     }
 }
 

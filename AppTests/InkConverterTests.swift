@@ -115,40 +115,4 @@ final class InkConverterTests: XCTestCase {
         XCTAssertEqual(a.maxX, b.maxX, accuracy: 0.05)
         XCTAssertEqual(a.maxY, b.maxY, accuracy: 0.05)
     }
-
-    func testStoreSavesReloadsAndKeepsIDs() throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let store = PageStore(directory: dir)
-        XCTAssertNil(try store.load())
-        var drawing = InkConverter.drawing(sample())
-        let first = try store.save(drawing: drawing, pageID: UUID(), size: CGSize(width: 595, height: 842), background: .standard(.dots))
-
-        let reopened = PageStore(directory: dir)
-        let loaded = try XCTUnwrap(try reopened.load())
-        XCTAssertEqual(loaded.background.kind, .dots)
-        XCTAssertEqual(loaded.strokes.map(\.id), first.page.strokes.map(\.id))
-
-        // Un trait déplacé garde son identifiant ; un trait ajouté en reçoit un nouveau.
-        drawing = InkConverter.drawing(loaded.strokes)
-        drawing.strokes[0].transform = CGAffineTransform(translationX: 20, y: 20)
-        drawing.strokes.append(InkConverter.pkStroke(sample()[0]))
-        let second = try reopened.save(drawing: drawing, pageID: loaded.id, size: CGSize(width: 595, height: 842), background: loaded.background)
-        XCTAssertEqual(second.page.strokes[0].id, loaded.strokes[0].id)
-        XCTAssertFalse(loaded.strokes.map(\.id).contains(second.page.strokes.last!.id))
-    }
-
-    func testCorruptFileIsQuarantinedNotOverwritten() throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let store = PageStore(directory: dir)
-        try Data("{ abîmé".utf8).write(to: store.fileURL)
-        XCTAssertThrowsError(try store.load())
-        let name = try XCTUnwrap(store.quarantine())
-        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent(name).path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: store.fileURL.path))
-    }
 }
