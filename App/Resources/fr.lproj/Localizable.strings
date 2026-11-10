@@ -1,0 +1,46 @@
+/* Éditeur */
+"canvas.label" = "Page de notes";
+"action.undo" = "Annuler";
+"action.redo" = "Rétablir";
+"action.fingerDraws" = "Dessiner au doigt";
+"action.fit" = "Ajuster à la largeur";
+"action.more" = "Options";
+"common.on" = "activé";
+"common.off" = "désactivé";
+"common.cancel" = "Annuler";
+
+/* Menu */
+"menu.background" = "Fond de page";
+"bg.blank" = "Blanc";
+"bg.ruled" = "Ligné";
+"bg.grid" = "Quadrillé";
+"bg.dots" = "Pointillé";
+"menu.diagnostics" = "Afficher le diagnostic";
+"menu.export" = "Exporter la page";
+"menu.stress" = "Test de charge : 5 000 traits";
+"menu.clear" = "Effacer la page";
+"clear.title" = "Effacer la page ?";
+"clear.message" = "Tous les traits seront supprimés. Vous pourrez annuler.";
+"clear.confirm" = "Effacer";
+
+/* Enregistrement */
+"save.saved" = "Enregistré";
+"save.saving" = "Enregistrement…";
+"save.error" = "Échec de l’enregistrement : %@";
+"save.unavailable" = "Stockage indisponible : rien ne sera conservé";
+"load.failed" = "Page illisible (%@). Fichier mis de côté : %@";
+
+/* Diagnostic */
+"diag.strokes" = "Traits";
+"diag.points" = "Points";
+"diag.lastTool" = "Dernier outil";
+"diag.force" = "Pression";
+"diag.altitude" = "Inclinaison";
+"diag.lastPoints" = "Points du trait";
+"diag.save" = "Enregistrement";
+"diag.size" = "Taille";
+"diag.load" = "Chargement";
+"diag.zoom" = "Zoom";
+"diag.input" = "Saisie";
+"diag.input.pencil" = "stylet seul";
+"diag.input.any" = "stylet et doigt";

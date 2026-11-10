@@ -1,0 +1,65 @@
+name: iOS
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versions des outils
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Tests du cœur (NootyCore)
+        run: swift test --package-path Packages/NootyCore
+
+      - name: Génération du projet Xcode
+        run: |
+          brew install xcodegen
+          xcodegen --version
+          xcodegen generate
+
+      - name: Tests de l'application (simulateur iPad)
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          ids = [d["udid"] for runtime, items in sorted(devices.items()) if "iOS" in runtime for d in items if d["name"].startswith("iPad")]
+          print(ids[-1])
+          ')
+          echo "Simulateur : $UDID"
+          set -o pipefail
+          xcodebuild test -project Nooty.xcodeproj -scheme Nooty -destination "id=$UDID" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee test.log \
+            | grep -E "error:|Test Case .*(passed|failed)|Executed [0-9]+ test|\*\* TEST"
+
+      - name: Compilation de l'IPA non signée
+        run: |
+          xcodebuild -project Nooty.xcodeproj -scheme Nooty -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -quiet build
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Nooty.app Payload/
+          zip -qry Nooty.ipa Payload
+          ls -lh Nooty.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nooty-ipa
+          path: Nooty.ipa
+          retention-days: 30

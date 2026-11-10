@@ -1,4 +1,11 @@
-node_modules
-dist
-*.log
-e2e/out
+# Généré par XcodeGen
+*.xcodeproj
+App/Info.plist
+# Produits de compilation
+build/
+DerivedData/
+.build/
+.swiftpm/
+Payload/
+*.ipa
+.DS_Store
