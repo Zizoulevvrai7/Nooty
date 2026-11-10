@@ -3,6 +3,7 @@ name: iOS
 on:
   push:
     branches: [main, "claude/**"]
+    paths-ignore: ["**.md", "docs/**"]
   pull_request:
   workflow_dispatch:
 
