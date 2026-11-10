@@ -116,15 +116,25 @@ enum InkConverter {
         return out
     }
 
+    /// PencilKit tronque les coordonnées du masque au centième. On arrondit au centième le plus
+    /// proche puis on s'écarte légèrement de zéro, pour que la troncature retombe sur la même valeur.
+    static func pencilKitMaskCoordinate(_ v: Double) -> Double {
+        let snapped = (v * 100).rounded() / 100
+        return snapped + (snapped >= 0 ? 0.002 : -0.002)
+    }
+
     static func bezier(_ elements: [PathElement]) -> UIBezierPath {
         let path = CGMutablePath()
+        func pt(_ x: Double, _ y: Double) -> CGPoint {
+            CGPoint(x: pencilKitMaskCoordinate(x), y: pencilKitMaskCoordinate(y))
+        }
         for e in elements {
             switch e {
-            case let .move(x, y): path.move(to: CGPoint(x: x, y: y))
-            case let .line(x, y): path.addLine(to: CGPoint(x: x, y: y))
-            case let .quad(cx, cy, x, y): path.addQuadCurve(to: CGPoint(x: x, y: y), control: CGPoint(x: cx, y: cy))
+            case let .move(x, y): path.move(to: pt(x, y))
+            case let .line(x, y): path.addLine(to: pt(x, y))
+            case let .quad(cx, cy, x, y): path.addQuadCurve(to: pt(x, y), control: pt(cx, cy))
             case let .cubic(c1x, c1y, c2x, c2y, x, y):
-                path.addCurve(to: CGPoint(x: x, y: y), control1: CGPoint(x: c1x, y: c1y), control2: CGPoint(x: c2x, y: c2y))
+                path.addCurve(to: pt(x, y), control1: pt(c1x, c1y), control2: pt(c2x, c2y))
             case .close: path.closeSubpath()
             }
         }

@@ -7,7 +7,7 @@ final class InkConverterTests: XCTestCase {
     private func sample() -> [Stroke] {
         var strokes = StrokeGenerator.handwriting(count: 30, pageWidth: Page.a4Width, pageHeight: Page.a4Height, seed: 11, createdAt: 1_700_000_000_000)
         strokes[2].transform = AffineMatrix(a: 0.8, b: 0.2, c: -0.2, d: 0.8, tx: 15, ty: -6)
-        strokes[4].mask = [.move(0, 0), .line(60, 0), .quad(70, 10, 60, 40), .cubic(40, 60, 10, 60, 0, 40), .close]
+        strokes[4].mask = [.move(0, 0), .line(60, 0), .quad(70, 10, 60, 40), .cubic(40, 60, 10, 60, 0, 40), .line(-12.37, 20.31), .line(-3.333, -7.777), .close]
         strokes[6].tool = .marker
         strokes[6].color = RGBA(hex: "#F5C51880")!
         return strokes
@@ -69,6 +69,7 @@ final class InkConverterTests: XCTestCase {
         XCTAssertEqual(current.strokes.map(\.id), first.strokes.map(\.id))
         for (s, o) in zip(current.strokes, first.strokes) {
             XCTAssertEqual(s.identityKey, o.identityKey)
+            XCTAssertEqual(s.mask, o.mask)
             assertSamePoints(s.points, o.points)
         }
     }
