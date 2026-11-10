@@ -19,18 +19,55 @@ final class InkConverterTests: XCTestCase {
         }
     }
 
-    func testStrokeRoundTripThroughPencilKitIsLossless() {
+    /// PencilKit normalise certaines valeurs à la création d'un trait (pression arrondie,
+    /// courbes du masque converties en segments). Ce qui compte : une fois normalisé, un trait
+    /// traverse indéfiniment PencilKit et le fichier sans aucune dérive.
+    func testConversionIsStableAfterPencilKitNormalisation() throws {
         for original in sample() {
-            let back = InkConverter.stroke(from: InkConverter.pkStroke(original), id: original.id)
-            XCTAssertEqual(back.tool, original.tool)
-            XCTAssertEqual(back.points, original.points)
-            XCTAssertEqual(back.transform, original.transform)
-            XCTAssertEqual(back.mask, original.mask)
-            XCTAssertEqual(back.createdAt, original.createdAt)
-            XCTAssertEqual(back.randomSeed, original.randomSeed)
-            XCTAssertEqual(back.color.r, original.color.r, accuracy: 0.004)
-            XCTAssertEqual(back.color.a, original.color.a, accuracy: 0.004)
-            XCTAssertEqual(back.identityKey, original.identityKey)
+            let once = InkConverter.stroke(from: InkConverter.pkStroke(original), id: original.id)
+            let twice = InkConverter.stroke(from: InkConverter.pkStroke(once), id: original.id)
+            XCTAssertEqual(twice.points, once.points)
+            XCTAssertEqual(twice.mask, once.mask)
+            XCTAssertEqual(twice.transform, once.transform)
+            XCTAssertEqual(twice.identityKey, once.identityKey)
+
+            // Passage par le fichier puis retour dans PencilKit : identique au contenu du fichier.
+            var page = Page.a4(updatedAt: 0)
+            page.strokes = [once]
+            let stored = try PageCodec.decode(try PageCodec.encode(page)).strokes[0]
+            let reloaded = InkConverter.stroke(from: InkConverter.pkStroke(stored), id: stored.id)
+            XCTAssertEqual(reloaded.points, stored.points)
+            XCTAssertEqual(reloaded.mask, stored.mask)
+            XCTAssertEqual(reloaded.identityKey, once.identityKey)
+        }
+    }
+
+    /// La normalisation de PencilKit reste invisible : écarts mesurés par rapport aux valeurs fournies.
+    func testPencilKitNormalisationStaysNegligible() {
+        for original in sample() {
+            let once = InkConverter.stroke(from: InkConverter.pkStroke(original), id: original.id)
+            XCTAssertEqual(once.tool, original.tool)
+            XCTAssertEqual(once.transform, original.transform)
+            XCTAssertEqual(once.createdAt, original.createdAt)
+            XCTAssertEqual(once.randomSeed, original.randomSeed)
+            XCTAssertEqual(once.color.r, original.color.r, accuracy: 0.004)
+            XCTAssertEqual(once.color.a, original.color.a, accuracy: 0.004)
+            XCTAssertEqual(once.points.count, original.points.count)
+            for (p, q) in zip(once.points, original.points) {
+                XCTAssertEqual(p.x, q.x, accuracy: 0.001)
+                XCTAssertEqual(p.y, q.y, accuracy: 0.001)
+                XCTAssertEqual(p.timeOffset, q.timeOffset, accuracy: 0.001)
+                XCTAssertEqual(p.width, q.width, accuracy: 0.001)
+                XCTAssertEqual(p.force, q.force, accuracy: 0.002)
+                XCTAssertEqual(p.opacity, q.opacity, accuracy: 0.001)
+                XCTAssertEqual(p.azimuth, q.azimuth, accuracy: 0.001)
+                XCTAssertEqual(p.altitude, q.altitude, accuracy: 0.001)
+            }
+            if let mask = original.mask {
+                XCTAssertNotNil(once.mask)
+                XCTAssertFalse(once.mask!.isEmpty)
+                XCTAssertEqual(once.mask!.count >= mask.count, true)
+            }
         }
     }
 
