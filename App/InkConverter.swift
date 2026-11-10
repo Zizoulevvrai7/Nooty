@@ -70,11 +70,17 @@ enum InkConverter {
         )
     }
 
+    /// PencilKit stocke la pression au millième en tronquant. Le fichier la conserve en Float32
+    /// (0,552 devient 0,55199999) : sans cet arrondi, chaque réouverture la ferait baisser d'un millième.
+    static func pencilKitForce(_ force: Double) -> Double {
+        (force * 1000).rounded() / 1000
+    }
+
     static func pkStroke(_ s: Stroke) -> PKStroke {
         let points = s.points.map { p in
             PKStrokePoint(
                 location: CGPoint(x: p.x, y: p.y), timeOffset: p.timeOffset,
-                size: CGSize(width: p.width, height: p.height), opacity: p.opacity, force: p.force,
+                size: CGSize(width: p.width, height: p.height), opacity: p.opacity, force: pencilKitForce(p.force),
                 azimuth: p.azimuth, altitude: p.altitude, secondaryScale: p.secondaryScale
             )
         }

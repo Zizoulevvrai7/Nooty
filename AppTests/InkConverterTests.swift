@@ -55,6 +55,24 @@ final class InkConverterTests: XCTestCase {
         }
     }
 
+    /// Simule cinq fermetures et réouvertures : aucune valeur ne doit dériver.
+    func testRepeatedSaveAndReloadDoesNotDrift() throws {
+        var page = Page.a4(updatedAt: 0)
+        page.strokes = sample().map { InkConverter.stroke(from: InkConverter.pkStroke($0), id: $0.id) }
+        let first = try PageCodec.decode(try PageCodec.encode(page))
+        var current = first
+        for _ in 0..<5 {
+            let canvas = InkConverter.drawing(current.strokes)
+            current.strokes = zip(canvas.strokes, current.strokes).map { InkConverter.stroke(from: $0, id: $1.id) }
+            current = try PageCodec.decode(try PageCodec.encode(current))
+        }
+        XCTAssertEqual(current.strokes.map(\.id), first.strokes.map(\.id))
+        for (s, o) in zip(current.strokes, first.strokes) {
+            XCTAssertEqual(s.identityKey, o.identityKey)
+            assertSamePoints(s.points, o.points)
+        }
+    }
+
     /// La normalisation de PencilKit reste invisible : écarts mesurés par rapport aux valeurs fournies.
     func testPencilKitNormalisationStaysNegligible() {
         for original in sample() {
