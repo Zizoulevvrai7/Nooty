@@ -23,6 +23,7 @@ struct RootContainer: UIViewControllerRepresentable {
             root = StorageErrorViewController(message: error.localizedDescription)
         }
         let nav = UINavigationController(rootViewController: root)
+        DispatchQueue.main.async { AppearanceSettings.apply() }
         nav.navigationBar.prefersLargeTitles = true
         nav.navigationBar.tintColor = Theme.accent
         nav.view.tintColor = Theme.accent

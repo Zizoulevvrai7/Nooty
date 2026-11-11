@@ -8,14 +8,18 @@ final class NewNotebookViewController: UIViewController, UITextFieldDelegate {
     ]
     static let papers: [(PaperColor, String)] = [(.white, "paperColor.white"), (.ivory, "paperColor.ivory"), (.yellow, "paperColor.yellow")]
 
-    private let onCreate: (String, Background) -> Void
+    private let onCreate: (String, Background, PaperSize, Bool) -> Void
     private var kind: BackgroundKind
     private var paper: PaperColor
+    private var size = PaperSize(rawValue: UserDefaults.standard.string(forKey: "nooty.lastSize") ?? "") ?? .a4
+    private var landscape = UserDefaults.standard.bool(forKey: "nooty.lastLandscape")
+    private let sizeControl = UISegmentedControl(items: PaperSize.allCases.map { L("size.\($0.rawValue)") })
+    private let orientation = UISegmentedControl(items: [L("orientation.portrait"), L("orientation.landscape")])
     private let nameField = UITextField()
     private let templateRow = UIStackView()
     private let paperRow = UIStackView()
 
-    init(onCreate: @escaping (String, Background) -> Void) {
+    init(onCreate: @escaping (String, Background, PaperSize, Bool) -> Void) {
         self.onCreate = onCreate
         kind = BackgroundKind(rawValue: UserDefaults.standard.string(forKey: "nooty.lastTemplate") ?? "") ?? .seyes
         paper = PaperColor(rawValue: UserDefaults.standard.string(forKey: "nooty.lastPaper") ?? "") ?? .white
@@ -60,7 +64,7 @@ final class NewNotebookViewController: UIViewController, UITextFieldDelegate {
             templateRow.leadingAnchor.constraint(equalTo: templateScroll.contentLayoutGuide.leadingAnchor),
             templateRow.trailingAnchor.constraint(equalTo: templateScroll.contentLayoutGuide.trailingAnchor),
             templateRow.heightAnchor.constraint(equalTo: templateScroll.frameLayoutGuide.heightAnchor),
-            templateScroll.heightAnchor.constraint(equalToConstant: 190),
+            templateScroll.heightAnchor.constraint(equalToConstant: 200),
         ])
 
         let paperHolder = UIView()
@@ -73,9 +77,23 @@ final class NewNotebookViewController: UIViewController, UITextFieldDelegate {
             paperRow.trailingAnchor.constraint(lessThanOrEqualTo: paperHolder.trailingAnchor),
         ])
 
+        sizeControl.selectedSegmentIndex = PaperSize.allCases.firstIndex(of: size) ?? 0
+        sizeControl.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.size = PaperSize.allCases[self.sizeControl.selectedSegmentIndex]
+            self.rebuildChoices()
+        }, for: .valueChanged)
+        orientation.selectedSegmentIndex = landscape ? 1 : 0
+        orientation.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.landscape = self.orientation.selectedSegmentIndex == 1
+            self.rebuildChoices()
+        }, for: .valueChanged)
         let column = UIStackView(arrangedSubviews: [
             header(L("new.name")), nameField, header(L("new.paper")), templateScroll, header(L("new.paperColor")), paperHolder,
+            header(L("new.size")), sizeControl, orientation,
         ])
+        column.setCustomSpacing(24, after: paperHolder)
         column.axis = .vertical
         column.spacing = 10
         column.setCustomSpacing(24, after: nameField)
@@ -114,9 +132,10 @@ final class NewNotebookViewController: UIViewController, UITextFieldDelegate {
     private func rebuildChoices() {
         templateRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
         paperRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let size = CGSize(width: Page.a4Width, height: Page.a4Height)
+        let dims = size.size(landscape: landscape)
+        let pageSize = CGSize(width: dims.width, height: dims.height)
         for (value, key) in Self.templates {
-            let image = PaperRenderer.image(.standard(value, paper: paper), pageSize: CGSize(width: size.width / 3.2, height: size.height / 3.2), width: 104)
+            let image = PaperRenderer.image(.standard(value, paper: paper), pageSize: CGSize(width: pageSize.width / 3.2, height: pageSize.height / 3.2), width: landscape ? 140 : 104)
             templateRow.addArrangedSubview(tile(image: image, title: L(key), selected: value == kind) { [weak self] in
                 self?.kind = value
                 self?.rebuildChoices()
@@ -179,8 +198,11 @@ final class NewNotebookViewController: UIViewController, UITextFieldDelegate {
     private func create() {
         UserDefaults.standard.set(kind.rawValue, forKey: "nooty.lastTemplate")
         UserDefaults.standard.set(paper.rawValue, forKey: "nooty.lastPaper")
+        UserDefaults.standard.set(size.rawValue, forKey: "nooty.lastSize")
+        UserDefaults.standard.set(landscape, forKey: "nooty.lastLandscape")
         let title = nameField.text ?? ""
         let background = Background.standard(kind, paper: paper)
-        dismiss(animated: true) { [onCreate] in onCreate(title, background) }
+        let size = size, landscape = landscape
+        dismiss(animated: true) { [onCreate] in onCreate(title, background, size, landscape) }
     }
 }

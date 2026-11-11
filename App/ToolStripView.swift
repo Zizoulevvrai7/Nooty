@@ -7,7 +7,9 @@ final class ToolStripView: UIView {
     /// Appelé quand l'utilisateur change un réglage.
     var onChange: ((ToolState) -> Void)?
     /// Appelé pour modifier la couleur d'une pastille déjà sélectionnée.
-    var onEditColor: ((_ index: Int, _ current: UIColor) -> Void)?
+    var onEditColor: ((_ index: Int, _ current: UIColor, _ source: UIView) -> Void)?
+    /// Appelé pour régler l'épaisseur d'un préréglage déjà sélectionné.
+    var onEditWidth: ((_ index: Int, _ source: UIView) -> Void)?
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
@@ -61,50 +63,82 @@ final class ToolStripView: UIView {
     private func rebuild() {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
-        let tools: [(ToolKind, String, String)] = [
-            (.pen, state.penStyle.symbol, L("tool.pen")),
-            (.highlighter, "highlighter", L("tool.highlighter")),
-            (.eraser, "eraser", L("tool.eraser")),
-            (.lasso, "lasso", L("tool.lasso")),
-        ]
-        for (kind, symbol, label) in tools {
-            stack.addArrangedSubview(iconButton(symbol, label, selected: state.kind == kind) { [weak self] in
+        for kind in ToolKind.allCases {
+            let symbol = kind == .pen ? state.penStyle.symbol : kind.symbol
+            stack.addArrangedSubview(iconButton(symbol, kind.title, selected: state.kind == kind) { [weak self] in
                 self?.update { $0.kind = kind }
             })
         }
         stack.addArrangedSubview(divider())
 
         switch state.kind {
-        case .pen, .highlighter:
-            if state.kind == .pen { stack.addArrangedSubview(penStyleButton()) }
-            for i in 0..<ToolState.widthCount {
-                stack.addArrangedSubview(widthButton(index: i))
-            }
-            stack.addArrangedSubview(divider())
-            for (i, hex) in state.colors.enumerated() {
-                stack.addArrangedSubview(swatch(index: i, color: ToolState.color(hex)))
-            }
+        case .pen:
+            stack.addArrangedSubview(menuButton(
+                title: state.penStyle.title, label: L("pen.style"),
+                actions: PenStyle.allCases.map { style in
+                    UIAction(title: style.title, image: UIImage(systemName: style.symbol), state: style == state.penStyle ? .on : .off) { [weak self] _ in
+                        self?.update { $0.penStyle = style }
+                    }
+                }
+            ))
+        case .shape:
+            stack.addArrangedSubview(menuButton(
+                title: state.shapeKind.title, label: L("shape.kind"),
+                actions: ShapeKind.allCases.map { kind in
+                    UIAction(title: kind.title, image: UIImage(systemName: kind.symbol), state: kind == state.shapeKind ? .on : .off) { [weak self] _ in
+                        self?.update { $0.shapeKind = kind }
+                    }
+                }
+            ))
         case .eraser:
-            let mode = UISegmentedControl(items: [L("eraser.stroke"), L("eraser.precise")])
-            mode.selectedSegmentIndex = state.eraserMode == .stroke ? 0 : 1
+            let mode = UISegmentedControl(items: EraserMode.allCases.map(\.title))
+            mode.selectedSegmentIndex = EraserMode.allCases.firstIndex(of: state.eraserMode) ?? 0
             mode.addAction(UIAction { [weak self, weak mode] _ in
-                self?.update { $0.eraserMode = mode?.selectedSegmentIndex == 0 ? .stroke : .precise }
+                guard let i = mode?.selectedSegmentIndex, EraserMode.allCases.indices.contains(i) else { return }
+                self?.update { $0.eraserMode = EraserMode.allCases[i] }
             }, for: .valueChanged)
             mode.accessibilityLabel = L("eraser.mode")
             mode.setContentHuggingPriority(.required, for: .horizontal)
             stack.addArrangedSubview(mode)
-            if state.eraserMode == .precise {
+            if state.eraserMode != .stroke {
                 for i in ToolState.eraserSizes.indices { stack.addArrangedSubview(eraserSizeButton(index: i)) }
             }
-        case .lasso:
+        case .lasso, .text, .laser, .tape:
             let hint = UILabel()
-            hint.text = L("lasso.hint")
+            hint.text = L("hint.\(state.kind.rawValue)")
             hint.font = .preferredFont(forTextStyle: .footnote)
             hint.adjustsFontForContentSizeCategory = true
             hint.textColor = Theme.secondaryText
             hint.setContentHuggingPriority(.required, for: .horizontal)
             stack.addArrangedSubview(hint)
+        case .pencil, .highlighter:
+            break
         }
+        if state.hasWidths {
+            for i in 0..<ToolState.widthCount { stack.addArrangedSubview(widthButton(index: i)) }
+        }
+        if state.hasColors {
+            stack.addArrangedSubview(divider())
+            for (i, hex) in state.colors.enumerated() {
+                stack.addArrangedSubview(swatch(index: i, color: ToolState.color(hex)))
+            }
+        }
+    }
+
+    private func menuButton(title: String, label: String, actions: [UIAction]) -> UIButton {
+        var config = UIButton.Configuration.gray()
+        config.title = title
+        config.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold))
+        config.imagePlacement = .trailing
+        config.imagePadding = 6
+        config.baseForegroundColor = Theme.text
+        config.cornerStyle = .large
+        let button = UIButton(configuration: config)
+        button.menu = UIMenu(title: label, options: .singleSelection, children: actions)
+        button.showsMenuAsPrimaryAction = true
+        button.accessibilityLabel = label
+        button.accessibilityValue = title
+        return sized(button, width: 92)
     }
 
     // MARK: - Éléments
@@ -143,26 +177,6 @@ final class ToolStripView: UIView {
         return v
     }
 
-    private func penStyleButton() -> UIButton {
-        var config = UIButton.Configuration.gray()
-        config.title = state.penStyle.title
-        config.image = UIImage(systemName: "chevron.down", withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold))
-        config.imagePlacement = .trailing
-        config.imagePadding = 6
-        config.baseForegroundColor = Theme.text
-        config.cornerStyle = .large
-        let button = UIButton(configuration: config)
-        button.menu = UIMenu(title: L("pen.style"), options: .singleSelection, children: PenStyle.allCases.map { style in
-            UIAction(title: style.title, image: UIImage(systemName: style.symbol), state: style == state.penStyle ? .on : .off) { [weak self] _ in
-                self?.update { $0.penStyle = style }
-            }
-        })
-        button.showsMenuAsPrimaryAction = true
-        button.accessibilityLabel = L("pen.style")
-        button.accessibilityValue = state.penStyle.title
-        return sized(button, width: 92)
-    }
-
     private func dotButton(diameter: CGFloat, selected: Bool, label: String, action: @escaping () -> Void) -> UIButton {
         let size = CGSize(width: 30, height: 30)
         let image = UIGraphicsImageRenderer(size: size).image { _ in
@@ -183,9 +197,20 @@ final class ToolStripView: UIView {
 
     private func widthButton(index: Int) -> UIButton {
         let labels = [L("width.fine"), L("width.medium"), L("width.thick")]
-        return dotButton(diameter: [5, 9, 14][index], selected: state.widthIndex == index, label: labels[index]) { [weak self] in
-            self?.update { $0.widthIndex = index }
-        }
+        let factor = state.widths[index]
+        let diameter = CGFloat(min(18, max(3, 4 + factor * 6)))
+        let selected = state.widthIndex == index
+        let button = dotButton(diameter: diameter, selected: selected, label: labels[index]) {}
+        button.addAction(UIAction { [weak self, weak button] _ in
+            guard let self, let button else { return }
+            if self.state.widthIndex == index {
+                self.onEditWidth?(index, button)
+            } else {
+                self.update { $0.widthIndex = index }
+            }
+        }, for: .primaryActionTriggered)
+        button.accessibilityHint = selected ? L("width.editHint") : nil
+        return button
     }
 
     private func eraserSizeButton(index: Int) -> UIButton {
@@ -207,9 +232,14 @@ final class ToolStripView: UIView {
             }
             color.setFill()
             UIBezierPath(ovalIn: CGRect(x: 6, y: 6, width: 22, height: 22)).fill()
-            UIColor.black.withAlphaComponent(0.18).setStroke()
+            // Liseré clair et sombre : une pastille reste visible sur une barre claire comme sombre.
+            UIColor.white.withAlphaComponent(0.55).setStroke()
+            let outer = UIBezierPath(ovalIn: CGRect(x: 5.5, y: 5.5, width: 23, height: 23))
+            outer.lineWidth = 1
+            outer.stroke()
+            UIColor.black.withAlphaComponent(0.25).setStroke()
             let edge = UIBezierPath(ovalIn: CGRect(x: 6, y: 6, width: 22, height: 22))
-            edge.lineWidth = 1
+            edge.lineWidth = 0.75
             edge.stroke()
         }.withRenderingMode(.alwaysOriginal)
         var config = UIButton.Configuration.plain()
@@ -218,7 +248,7 @@ final class ToolStripView: UIView {
         let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
             guard let self else { return }
             if self.state.colorIndex == index {
-                self.onEditColor?(index, color)
+                self.onEditColor?(index, color, self)
             } else {
                 self.update { $0.colorIndex = index }
             }

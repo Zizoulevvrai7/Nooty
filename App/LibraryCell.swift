@@ -131,6 +131,8 @@ final class LibraryCell: UICollectionViewCell {
         preview.backgroundColor = thumbnail == nil ? color.withAlphaComponent(0.18) : .white
         preview.image = thumbnail
         star.isHidden = !item.favorite || trashed
+        preview.contentMode = item.locked ? .center : .scaleAspectFill
+        preview.tintColor = color
         titleLabel.text = item.title
         if isFolder {
             detailLabel.text = childCount == 1 ? L("library.oneItem") : L("library.items", childCount)
@@ -143,7 +145,7 @@ final class LibraryCell: UICollectionViewCell {
         titleLabel.isAccessibilityElement = true
         titleLabel.accessibilityTraits = .button
         titleLabel.accessibilityLabel = [
-            isFolder ? L("library.folder") : L("library.notebook"), item.title, detailLabel.text ?? "",
+            L("kind.\(item.kind.rawValue)"), item.title, detailLabel.text ?? "",
             item.favorite ? L("library.favorite") : "",
         ].filter { !$0.isEmpty }.joined(separator: ", ")
         detailLabel.isAccessibilityElement = false

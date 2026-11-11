@@ -101,6 +101,8 @@ enum PaperRenderer {
 final class PagesBackgroundView: UIView {
     private var frames: [CGRect] = []
     private var backgrounds: [Background] = []
+    private var backdrops: [Backdrop?] = []
+    var resources: URL?
     private var origin = CGPoint.zero
     private var scale: CGFloat = 1
 
@@ -118,6 +120,7 @@ final class PagesBackgroundView: UIView {
     func setPages(_ pages: [PageInfo], layout: PageLayout) {
         frames = layout.frames.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
         backgrounds = pages.map(\.background)
+        backdrops = pages.map(\.backdrop)
         setNeedsDisplay()
     }
 
@@ -133,7 +136,7 @@ final class PagesBackgroundView: UIView {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         Theme.desk.setFill()
         ctx.fill(rect)
-        for (frame, bg) in zip(frames, backgrounds) {
+        for (i, (frame, bg)) in zip(frames, backgrounds).enumerated() {
             let page = CGRect(
                 x: origin.x + frame.minX * scale, y: origin.y + frame.minY * scale,
                 width: frame.width * scale, height: frame.height * scale
@@ -145,6 +148,12 @@ final class PagesBackgroundView: UIView {
             ctx.fill(page)
             ctx.restoreGState()
             PaperRenderer.draw(bg, pageRect: page, scale: scale, clip: rect, in: ctx)
+            if i < backdrops.count, let backdrop = backdrops[i], let resources {
+                ctx.saveGState()
+                ctx.clip(to: page)
+                PageRenderer.drawBackdrop(backdrop, resources: resources, in: page, context: ctx, pixelWidth: page.width * contentScaleFactor)
+                ctx.restoreGState()
+            }
         }
     }
 }
