@@ -456,7 +456,10 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         tapeLayer.place(offset: canvas.contentOffset, scale: canvas.zoomScale)
         let index = currentPageIndex()
         let text = L("page.position", index + 1, manifest.pages.count)
-        if pageLabel.text != text { pageLabel.text = text }
+        if pageLabel.text != text {
+            pageLabel.text = text
+            pagePill.accessibilityLabel = text
+        }
         updateSelectionBox()
         positionTextEditor()
     }

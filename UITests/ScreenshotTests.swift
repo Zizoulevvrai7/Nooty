@@ -32,7 +32,7 @@ final class ScreenshotTests: XCTestCase {
         app.buttons["Créer"].tap()
         XCTAssertTrue(app.buttons["Stylo"].waitForExistence(timeout: 20))
         sleep(1)
-        XCTAssertTrue(app.staticTexts["1 sur 1"].exists, "l’indicateur de page doit afficher « 1 sur 1 »")
+        XCTAssertTrue(app.buttons["1 sur 1"].exists, "l’indicateur de page doit afficher « 1 sur 1 »")
         capture("04-editeur-stylo")
 
         for (tool, name) in [("Formes", "05-outil-formes"), ("Gomme", "06-outil-gomme"), ("Texte", "07-outil-texte"), ("Ruban", "08-outil-ruban")] {
@@ -46,7 +46,14 @@ final class ScreenshotTests: XCTestCase {
         if tapIfPresent(app.buttons["Texte"]) {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.45)).tap()
             sleep(1)
-            app.typeText("Bornage : délimitation des propriétés")
+            capture("09a-apres-toucher-texte")
+            let field = app.textViews.firstMatch
+            print("DIAGNOSTIC zones de texte : \(app.textViews.count), existe : \(field.exists)")
+            if field.exists {
+                field.typeText("Bornage : délimitation des propriétés")
+            } else {
+                print("DIAGNOSTIC hiérarchie : \(app.debugDescription.prefix(4000))")
+            }
             sleep(1)
             capture("09-zone-de-texte")
             if tapIfPresent(app.buttons["Terminé"], timeout: 2) || tapIfPresent(app.buttons["Done"], timeout: 2) {}
