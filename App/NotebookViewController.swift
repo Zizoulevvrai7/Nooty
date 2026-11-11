@@ -336,6 +336,14 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         let pencil = NSNumber(value: UITouch.TouchType.pencil.rawValue)
         let finger = NSNumber(value: UITouch.TouchType.direct.rawValue)
         toolPan.allowedTouchTypes = fingerDraws ? [pencil, finger] : [pencil]
+        // Avec les outils de Nooty, le défilement ne doit jamais prendre le geste du stylet :
+        // sinon le geste est annulé et la forme tracée disparaît.
+        if custom {
+            canvas.panGestureRecognizer.allowedTouchTypes = fingerDraws ? [] : [finger]
+            if fingerDraws { canvas.panGestureRecognizer.minimumNumberOfTouches = 2 }
+        } else {
+            canvas.panGestureRecognizer.minimumNumberOfTouches = 1
+        }
         toolTap.allowedTouchTypes = [pencil, finger]
         tapeLayer.tapesInteractive = tools.kind != .tape
         if tools.kind != .lasso && tools.kind != .text { clearSelection() }
@@ -516,36 +524,48 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
             return
         }
         let count = canvas.drawing.strokes.count
-        if count == lastStrokeCount + 1, tools.holdToShape, tools.kind == .pen || tools.kind == .pencil, let last = canvas.drawing.strokes.last {
+        if count == lastStrokeCount + 1, tools.holdToShape, tools.kind == .pen || tools.kind == .pencil, let last = canvas.drawing.strokes.last,
+           heldShape(last) != nil {
             lastStrokeCount = count
-            if convertHeldStroke(last) { return }
+            // Le remplacement est différé : modifier le dessin pendant que le moteur d'encre
+            // enregistre le trait peut être annulé par celui-ci.
+            DispatchQueue.main.async { [weak self] in self?.convertHeldStroke(last) }
+            return
         }
         lastStrokeCount = count
         audioController?.noteChange()
         markChanged()
     }
 
-    /// Dessiner puis maintenir le stylet immobile : le trait est remplacé par la forme reconnue.
-    private func convertHeldStroke(_ stroke: PKStroke) -> Bool {
+    /// Forme reconnue si le stylet est resté immobile à la fin du trait.
+    private func heldShape(_ stroke: PKStroke) -> ShapeSpec? {
         let path = stroke.path
-        guard path.count >= 8, let lastPoint = path.last else { return false }
+        guard path.count >= 8, let lastPoint = path.last else { return nil }
         let end = lastPoint.timeOffset
         var heldFrom = end
         for p in path.reversed() {
             if hypot(p.location.x - lastPoint.location.x, p.location.y - lastPoint.location.y) > 4 { break }
             heldFrom = p.timeOffset
         }
-        guard end - heldFrom >= 0.45 else { return false }
+        guard end - heldFrom >= 0.45 else { return nil }
         let pts = path.map { p -> (x: Double, y: Double) in
             let q = p.location.applying(stroke.transform)
             return (Double(q.x), Double(q.y))
         }
-        guard let spec = ShapeRecognizer.recognize(pts) else { return false }
+        return ShapeRecognizer.recognize(pts)
+    }
+
+    /// Dessiner puis maintenir le stylet immobile : le trait est remplacé par la forme reconnue.
+    private func convertHeldStroke(_ stroke: PKStroke) {
+        guard let spec = heldShape(stroke) else { return }
         var drawing = canvas.drawing
-        drawing.strokes.removeLast()
-        drawing.strokes.append(contentsOf: shapeStrokes(spec, ink: stroke.ink, width: max(1, path.first?.size.width ?? 2)))
+        // Retire précisément le trait maintenu (même graine, même date), où qu'il soit.
+        guard let index = drawing.strokes.lastIndex(where: {
+            $0.randomSeed == stroke.randomSeed && $0.path.creationDate == stroke.path.creationDate
+        }) else { return }
+        drawing.strokes.remove(at: index)
+        drawing.strokes.append(contentsOf: shapeStrokes(spec, ink: stroke.ink, width: max(1, stroke.path.first?.size.width ?? 2)))
         replaceDrawing(drawing, actionName: L("shape.title"))
-        return true
     }
 
     private func shapeStrokes(_ spec: ShapeSpec, ink: PKInk, width: CGFloat) -> [PKStroke] {
