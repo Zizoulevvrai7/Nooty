@@ -554,7 +554,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
                     opacity: 1, force: 1, azimuth: 0, altitude: .pi / 2
                 )
             }
-            return PKStroke(ink: ink, path: PKStrokePath(controlPoints: points, creationDate: start))
+            return PKStroke(ink: ink, path: PKStrokePath(controlPoints: points, creationDate: start), transform: .identity, mask: nil)
         }
     }
 
@@ -1415,7 +1415,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         UIView.animate(withDuration: 0.25, animations: { self.view.layoutIfNeeded() }, completion: { _ in
             if !show { self.panel.isHidden = true }
         })
-        UIAccessibility.post(notification: .screenChanged, argument: show ? panel : canvas)
+        UIAccessibility.post(notification: .screenChanged, argument: show ? (panel as UIView) : (canvas as UIView))
     }
 
     var panelPages: [PageInfo] { manifest.pages }
@@ -1454,7 +1454,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     private func insertActions() -> [UIMenuElement] {
         var collection: [UIMenuElement] = ElementCollection.shared.items().prefix(30).map { url in
-            UIAction(title: url.deletingPathExtension().lastPathComponent.prefix(8) + "…", image: ElementCollection.shared.thumbnail(url)) { [weak self] _ in
+            UIAction(title: String(url.deletingPathExtension().lastPathComponent.prefix(8)) + "…", image: ElementCollection.shared.thumbnail(url)) { [weak self] _ in
                 if let image = UIImage(contentsOfFile: url.path) { self?.insertImage(image) }
             }
         }
@@ -1588,7 +1588,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         return indices.filter { manifest.pages.indices.contains($0) }.map { (manifest.pages[$0], strokes[$0], elements[$0]) }
     }
 
-    private func share(_ url: URL) {
+    private func shareFile(_ url: URL) {
         let share = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         share.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItems?[1]
         present(share, animated: true)
@@ -1605,7 +1605,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(baseFileName + suffix + ".pdf")
         do {
             try data.write(to: url, options: .atomic)
-            share(url)
+            shareFile(url)
         } catch {
             showAlert(L("common.error"), error.localizedDescription)
         }
@@ -1617,7 +1617,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(baseFileName + " - p\(page + 1).png")
         do {
             try image.pngData()?.write(to: url, options: .atomic)
-            share(url)
+            shareFile(url)
         } catch {
             showAlert(L("common.error"), error.localizedDescription)
         }
@@ -1626,7 +1626,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     private func exportNooty() {
         saveNow(wait: true)
         do {
-            share(try library.exportNooty(itemID))
+            shareFile(try library.exportNooty(itemID))
         } catch {
             showAlert(L("common.error"), error.localizedDescription)
         }

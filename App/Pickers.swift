@@ -19,8 +19,11 @@ final class PhotoPickerDelegate: NSObject, PHPickerViewControllerDelegate {
         for (i, r) in results.enumerated() where r.itemProvider.canLoadObject(ofClass: UIImage.self) {
             group.enter()
             r.itemProvider.loadObject(ofClass: UIImage.self) { object, _ in
-                images[i] = object as? UIImage
-                group.leave()
+                let image = object as? UIImage
+                DispatchQueue.main.async {
+                    images[i] = image
+                    group.leave()
+                }
             }
         }
         group.notify(queue: .main) { [done] in done(images.compactMap { $0 }) }

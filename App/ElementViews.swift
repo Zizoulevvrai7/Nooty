@@ -198,9 +198,9 @@ final class SelectionOverlayView: UIView {
         }
         resizeHandle.accessibilityLabel = L("selection.resize")
         rotateHandle.accessibilityLabel = L("selection.rotate")
-        resizeHandle.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(resize(_:))))
-        rotateHandle.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(rotate(_:))))
-        addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(move(_:))))
+        resizeHandle.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleResize(_:))))
+        rotateHandle.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleRotate(_:))))
+        addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleMove(_:))))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) non utilisé") }
@@ -234,7 +234,7 @@ final class SelectionOverlayView: UIView {
         return containsInBox(point) ? self : nil
     }
 
-    @objc private func move(_ g: UIPanGestureRecognizer) {
+    @objc private func handleMove(_ g: UIPanGestureRecognizer) {
         if g.state == .changed {
             onMove?(g.translation(in: self))
             g.setTranslation(.zero, in: self)
@@ -243,7 +243,7 @@ final class SelectionOverlayView: UIView {
         }
     }
 
-    @objc private func resize(_ g: UIPanGestureRecognizer) {
+    @objc private func handleResize(_ g: UIPanGestureRecognizer) {
         switch g.state {
         case .began:
             startBox = box
@@ -267,7 +267,7 @@ final class SelectionOverlayView: UIView {
         }
     }
 
-    @objc private func rotate(_ g: UIPanGestureRecognizer) {
+    @objc private func handleRotate(_ g: UIPanGestureRecognizer) {
         let c = CGPoint(x: box.midX, y: box.midY)
         let p = g.location(in: self)
         let angle = atan2(p.y - c.y, p.x - c.x) + .pi / 2

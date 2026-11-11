@@ -277,7 +277,8 @@ final class AudioController: NSObject, AVAudioPlayerDelegate {
         committed.append(contentsOf: live)
         live = []
         task = nil
-        startTranscription(offset: offset - (nowMs() - spanStartWall) / 1000 + (nowMs() - spanStartWall) / 1000 - offset + offset - 0)
+        _ = offset
+        startTranscription(offset: spanStartAudio)
     }
 
     /// Regroupe les mots en phrases, chaque phrase gardant le début et la fin de ses mots.
@@ -839,7 +840,7 @@ final class PlayerViewController: UIViewController, UITableViewDataSource, UITab
         fwd.setImage(UIImage(systemName: "goforward.15"), for: .normal)
         fwd.accessibilityLabel = L("audio.forward15")
         rate.showsMenuAsPrimaryAction = true
-        rate.menu = UIMenu(title: L("audio.rate"), children: [0.5, 0.75, 1, 1.25, 1.5, 2].map { (r: Float) in
+        rate.menu = UIMenu(title: L("audio.rate"), children: ([0.5, 0.75, 1, 1.25, 1.5, 2] as [Float]).map { r in
             UIAction(title: "\(r)×") { [weak self] _ in self?.controller?.setRate(r) }
         })
         rate.accessibilityLabel = L("audio.rate")

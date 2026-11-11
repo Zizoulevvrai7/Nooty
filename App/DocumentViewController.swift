@@ -248,7 +248,7 @@ final class DocumentViewController: UIViewController, UITextViewDelegate, UINavi
         try? index.encoded().write(to: NotebookStore.indexURL(dir), options: .atomic)
     }
 
-    private func share(_ url: URL) {
+    private func shareFile(_ url: URL) {
         let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         vc.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
         present(vc, animated: true)
@@ -259,7 +259,7 @@ final class DocumentViewController: UIViewController, UITextViewDelegate, UINavi
     private func exportPDF() {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(baseName + ".pdf")
         try? pdfData().write(to: url, options: .atomic)
-        share(url)
+        shareFile(url)
     }
 
     private func exportRTF() {
@@ -267,12 +267,12 @@ final class DocumentViewController: UIViewController, UITextViewDelegate, UINavi
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(baseName + ".rtf")
         try? FileManager.default.removeItem(at: url)
         try? FileManager.default.copyItem(at: fileURL, to: url)
-        share(url)
+        shareFile(url)
     }
 
     private func exportNooty() {
         saveNow()
-        do { share(try library.exportNooty(itemID)) } catch {}
+        do { shareFile(try library.exportNooty(itemID)) } catch {}
     }
 }
 

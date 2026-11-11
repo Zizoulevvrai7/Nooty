@@ -1,5 +1,6 @@
 import AVFoundation
 import NootyCore
+import UIKit
 import PDFKit
 import PencilKit
 import XCTest
@@ -193,7 +194,7 @@ final class StorageTests: XCTestCase {
 
     func testPDFExportKeepsPageCountAndSize() throws {
         let info = PageInfo(width: 612, height: 792, background: .standard(.grid))
-        let pages = [(info, pageStrokes(3, seed: 1), [PageElement]()), (info, [], [])]
+        let pages: [(info: PageInfo, strokes: [Stroke], elements: [PageElement])] = [(info, pageStrokes(3, seed: 1), []), (info, [], [])]
         let data = PageRenderer.pdf(pages: pages, resources: dir)
         let document = try XCTUnwrap(PDFDocument(data: data))
         XCTAssertEqual(document.pageCount, 2)
