@@ -3,9 +3,10 @@
 Application iPad personnelle de prise de notes à l'Apple Pencil. Native (Swift, UIKit, PencilKit),
 local-first, sans compte ni abonnement. Code, format de fichier et identité visuelle indépendants.
 
-**État : version 0.2.** Bibliothèque, blocs-notes multipages, modèles de papier (dont Seyès) et
-barre d'outils propre à Nooty. L'audio, la transcription, les images, le PDF et l'IA ne sont pas
-encore là.
+**État : version 1.0.** Bibliothèque, blocs-notes, tableaux blancs et documents texte ; tous les
+outils d'écriture ; images, textes, formes, rubans ; PDF ; audio synchronisé avec transcription et
+export MP3 ; recherche ; cartes de révision ; assistant IA facultatif. Détail et limites :
+[`docs/FONCTIONS.md`](docs/FONCTIONS.md).
 
 ## Installer sur l'iPad (sans Mac)
 
@@ -86,52 +87,47 @@ swift test --package-path Packages/NootyCore
 
 ## Demandé / implémenté / testé / limites
 
-« Simulateur » : tests automatiques sur simulateur iPad. Rien n'a été vérifié sur un iPad réel
-tant que le protocole ci-dessous n'est pas fait.
-
-| Fonction | État | Testé | Limites |
-|---|---|---|---|
-| Bibliothèque : dossiers et sous-dossiers, blocs-notes | Implémenté | Unitaire + simulateur (stockage) | Affichage en grille seulement |
-| Créer, renommer, déplacer, dupliquer, couleur | Implémenté | Unitaire | Dupliquer : blocs-notes seulement |
-| Corbeille, restauration, suppression définitive | Implémenté | Unitaire + simulateur | — |
-| Favoris, tri par nom, modification, création | Implémenté | Unitaire | — |
-| Recherche, documents récents, import, export | Non implémenté | — | — |
-| Nouveau bloc-notes : nom, modèle, couleur du papier | Implémenté | Non | Format A4 portrait uniquement |
-| Papiers Seyès, ligné, quadrillé, pointillé, vierge | Implémenté | Non | Espacements fixes |
-| Pages : ajouter avant, après, à la fin ; supprimer | Implémenté | Unitaire (disposition) | Pas de réorganisation ni de miniatures de pages |
-| Modèle indépendant par page | Implémenté | Non | — |
-| Reprise à la dernière page consultée | Implémenté | Unitaire (format) | Le zoom n'est pas mémorisé |
-| Stylos bille, plume, pinceau ; 3 épaisseurs ; 5 couleurs modifiables | Implémenté | Simulateur (outils valides) | Épaisseurs à régler d'après vos essais |
-| Surligneur | Implémenté | Non | — |
-| Gomme par trait entier ou de précision, 3 tailles | Implémenté | Non | — |
-| Lasso : déplacer, copier, supprimer | Implémenté (PencilKit) | Non | Pas de redimensionnement ni de rotation |
-| Stylet seul par défaut, option « dessiner au doigt » | Implémenté | Non | Rejet de paume : celui d'iPadOS |
-| Annuler / rétablir | Implémenté | Non | Historique vidé quand on ajoute ou supprime une page |
-| Enregistrement par page, récupération de fichiers abîmés | Implémenté | Simulateur | Une modification faite moins de 0,3 s avant un arrêt brutal peut être perdue |
-| Conversion PencilKit ↔ format sans dérive | Implémenté | Simulateur | Inclinaison stable à 0,001° près |
-| Miniature de couverture | Implémenté | Non | Première page seulement |
-| Onglets, formes, texte, images, PDF | Non implémenté | — | Versions suivantes |
-| Audio, export MP3, transcription, IA | Non implémenté | — | Versions suivantes |
+Le tableau complet, fonction par fonction, est dans [`docs/FONCTIONS.md`](docs/FONCTIONS.md).
+« Simulateur » signifie : tests automatiques et captures d'écran sur simulateur iPad.
+Rien de ce qui demande le Pencil, le micro, l'appareil photo ou le réseau n'a été vérifié sur un
+iPad réel.
 
 ## Protocole de test sur l'iPad
 
-1. Créer un dossier, puis un bloc-notes Seyès dedans ; le renommer, le mettre en favori.
-2. Écrire avec les trois types de stylo et les trois épaisseurs ; dire lequel se rapproche le plus de votre réglage Goodnotes.
-3. Vingt lignes d'écriture, paume posée : aucun trait parasite. Doigt pour déplacer et zoomer.
-4. Surligneur, gomme « trait entier », gomme « précision », lasso.
-5. Changer une couleur : toucher deux fois la même pastille.
-6. Ajouter une page après, avant et à la fin ; écrire sur chacune ; supprimer celle du milieu : les autres gardent leur contenu.
-7. Revenir à la bibliothèque : la miniature montre la première page.
-8. Fermer l'application depuis le sélecteur d'apps juste après un trait, rouvrir : le trait est là, à la même page.
-9. Mettre le bloc-notes à la corbeille, le restaurer.
-10. Réinstaller par Sideloadly : tout est encore là. Mode avion : tout fonctionne.
+1. **Bibliothèque** : créer un dossier, un bloc-notes Seyès A4, un tableau blanc, un document texte ;
+   renommer, mettre en favori, verrouiller, passer en vue liste, rechercher un titre.
+2. **Écriture** : stylo (bille, plume, pinceau), crayon, surligneur, trois épaisseurs, réglage fin en
+   touchant deux fois une épaisseur, couleurs en touchant deux fois une pastille.
+3. **Gommes** : précision, standard, trait entier.
+4. **Formes** : outil Formes ; puis avec le stylo, dessiner un rectangle et maintenir le Pencil immobile.
+5. **Lasso** : entourer des traits et les déplacer ; toucher une image ou un texte pour le sélectionner.
+6. **Texte** : outil Texte, toucher la page, écrire ; gras, taille, couleur ; note repositionnable.
+7. **Images** : Insérer › Photos ; déplacer, redimensionner, pivoter, recadrer ; ajouter à « Mes éléments ».
+8. **Ruban** : tracer un ruban sur une définition, le toucher pour révéler.
+9. **Pages** : panneau des pages, réorganiser par appui long, dupliquer, signet, titre de plan,
+   copier dans un autre bloc-notes, aller à la page en touchant « 1 sur N ».
+10. **PDF** : importer un PDF de cours, annoter, exporter en PDF ; scanner une feuille.
+11. **Audio** : enregistrer en écrivant, ouvrir la transcription, arrêter ; lire, changer la vitesse,
+    activer « Rejouer l'écriture », toucher un mot écrit ; exporter en MP3 et l'écouter ailleurs.
+12. **Recherche** : rechercher un mot écrit à la main, un mot du PDF, un mot prononcé.
+13. **Cartes** : créer deux cartes, faire une séance de révision.
+14. **IA** (facultatif) : saisir une clé Gemini dans Réglages, demander un résumé, poser une question.
+15. **Robustesse** : fermer l'application juste après un trait, rouvrir ; réinstaller par Sideloadly ;
+    mode avion.
 
 ## Dépendances et licences
 
-Aucune bibliothèque tierce dans l'application : uniquement les frameworks d'Apple
-(UIKit, SwiftUI, PencilKit, Foundation). Outils de compilation : XcodeGen (MIT),
-installé sur le Mac de GitHub au moment de la compilation.
+- Frameworks d'Apple : UIKit, SwiftUI, PencilKit, PDFKit, Vision, VisionKit, Speech, AVFoundation,
+  LocalAuthentication.
+- [shine](https://github.com/toots/shine), encodeur MP3, licence GNU LGPL 2, sources incluses dans
+  `Packages/Shine` (voir son `README.md`).
+- Outil de compilation : XcodeGen (MIT), installé sur le Mac de GitHub.
+- Facultatif : API Gemini de Google pour l'IA, avec la clé de l'utilisateur.
 
 ## Confidentialité
 
-Aucun appel réseau, aucune télémétrie, aucun compte. Les notes restent sur l'iPad.
+- Aucune télémétrie, aucun compte. Les notes restent sur l'iPad.
+- La transcription se fait sur l'iPad quand il en est capable ; l'envoi aux serveurs d'Apple n'a
+  lieu que si l'option est activée dans les réglages.
+- L'IA est désactivée par défaut. Avant chaque envoi, l'application indique ce qui part et à qui.
+  La clé est rangée dans le trousseau de l'iPad, jamais dans le code.
