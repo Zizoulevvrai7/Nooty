@@ -56,12 +56,8 @@ final class AudioController: NSObject, AVAudioPlayerDelegate {
 
     func attach() {
         guard let editor, bar.superview == nil else { return }
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        editor.view.addSubview(bar)
-        NSLayoutConstraint.activate([
-            bar.trailingAnchor.constraint(equalTo: editor.view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            bar.bottomAnchor.constraint(equalTo: editor.view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
-        ])
+        // Pastille d'enregistrement, à droite de la rangée des réglages d'outil.
+        editor.audioSlot.addArrangedSubview(bar)
         bar.update(state: .idle, elapsed: 0, count: editor.manifest.recordings.count)
     }
 
@@ -136,6 +132,7 @@ final class AudioController: NSObject, AVAudioPlayerDelegate {
             timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }
             UIApplication.shared.isIdleTimerDisabled = true
             tick()
+            editor?.rebuildToolbar()
         } catch {
             cleanupEngine()
             alert(L("audio.startFailed", error.localizedDescription))
@@ -199,6 +196,7 @@ final class AudioController: NSObject, AVAudioPlayerDelegate {
             try? FileManager.default.removeItem(at: editor.store.resourceURL(r.resource))
         }
         bar.update(state: .idle, elapsed: 0, count: editor?.manifest.recordings.count ?? 0)
+        editor?.rebuildToolbar()
         transcriptView?.dismiss(animated: true)
     }
 
@@ -536,7 +534,7 @@ func formatDuration(_ t: Double) -> String {
 // MARK: - Interface
 
 /// Commandes d'enregistrement flottantes, en bas à droite de l'éditeur.
-final class AudioBarView: UIView {
+final class AudioBarView: ChromePill {
     enum State { case idle, recording, paused }
 
     var onRecord: (() -> Void)?
@@ -545,38 +543,22 @@ final class AudioBarView: UIView {
     var onList: (() -> Void)?
     var onTranscript: (() -> Void)?
 
-    private let stack = UIStackView()
     private let time = UILabel()
-    private let dot = UIView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        Theme.style(panel: self, radius: 22)
-        stack.axis = .horizontal
-        stack.spacing = 4
-        stack.alignment = .center
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-        ])
-        time.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
-        time.textColor = Theme.text
-        dot.backgroundColor = .systemRed
-        dot.layer.cornerRadius = 5
-        dot.widthAnchor.constraint(equalToConstant: 10).isActive = true
-        dot.heightAnchor.constraint(equalToConstant: 10).isActive = true
+        time.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+        time.textColor = Theme.danger
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) non utilisé") }
 
-    private func button(_ symbol: String, _ label: String, tint: UIColor = Theme.text, action: (() -> Void)?) -> UIButton {
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold))
-        config.baseForegroundColor = tint
+    private func button(_ symbol: String, _ label: String, tint: UIColor = Theme.chromeText, filled: Bool = false, action: (() -> Void)?) -> UIButton {
+        var config = filled ? UIButton.Configuration.filled() : UIButton.Configuration.plain()
+        config.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold))
+        config.baseForegroundColor = filled ? .white : tint
+        config.baseBackgroundColor = Theme.danger
+        config.cornerStyle = .large
         let b = UIButton(configuration: config, primaryAction: UIAction { _ in action?() })
         b.accessibilityLabel = label
         b.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
@@ -584,23 +566,26 @@ final class AudioBarView: UIView {
         return b
     }
 
+    /// Au repos, la pastille ne montre que l'accès aux enregistrements, s'il y en a.
     func update(state: State, elapsed: Double, count: Int) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         switch state {
         case .idle:
-            stack.addArrangedSubview(button("mic.fill", L("audio.record"), tint: .systemRed, action: onRecord))
+            isHidden = count == 0
             let list = button("waveform", L("audio.recordings"), action: onList)
-            if count > 0 { list.configuration?.title = "\(count)" }
+            list.configuration?.title = "\(count)"
+            list.configuration?.imagePadding = 6
             stack.addArrangedSubview(list)
         case .recording, .paused:
-            dot.alpha = state == .recording ? 1 : 0.3
+            isHidden = false
             time.text = formatDuration(elapsed)
+            time.alpha = state == .recording ? 1 : 0.5
             time.accessibilityLabel = L("audio.elapsed", formatDuration(elapsed))
-            stack.addArrangedSubview(dot)
-            stack.addArrangedSubview(time)
-            stack.addArrangedSubview(button(state == .recording ? "pause.fill" : "record.circle", state == .recording ? L("audio.pause") : L("audio.resume"), action: onPause))
-            stack.addArrangedSubview(button("stop.fill", L("audio.stop"), action: onStop))
             stack.addArrangedSubview(button("text.bubble", L("audio.liveTranscript"), action: onTranscript))
+            stack.addArrangedSubview(button(state == .recording ? "pause.fill" : "record.circle", state == .recording ? L("audio.pause") : L("audio.resume"), action: onPause))
+            stack.addArrangedSubview(button("stop.fill", L("audio.stop"), filled: true, action: onStop))
+            stack.addArrangedSubview(time)
+            stack.setCustomSpacing(10, after: stack.arrangedSubviews[2])
         }
     }
 }

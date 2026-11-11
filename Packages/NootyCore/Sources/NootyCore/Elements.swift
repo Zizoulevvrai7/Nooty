@@ -29,8 +29,20 @@ public enum TextAlignment: String, CaseIterable, Sendable {
     case left, center, right
 }
 
+/// Police d'une zone de texte. Les quatre premières suivent le système ; les autres désignent
+/// une famille installée sur l'appareil. Une valeur inconnue (fichier plus récent) se lit `system`.
 public enum FontFamily: String, CaseIterable, Sendable {
     case system, serif, rounded, monospaced
+    // Linéales
+    case avenir, futura, gillSans, helvetica, optima, trebuchet, verdana
+    // À empattements
+    case georgia, baskerville, palatino, didot, bodoni, hoefler, charter, cochin, times
+    // Machine et chasse fixe
+    case typewriter, courier, menlo
+    // Manuscrites et fantaisie
+    case chalkboard, markerFelt, noteworthy, bradleyHand, snellRoundhand, savoye, zapfino, chalkduster
+    // Affiche
+    case rockwell, copperplate, papyrus, party
 }
 
 /// Zone de texte libre ou note repositionnable (si `fill` est défini).

@@ -19,58 +19,69 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     private(set) var elements: [PageElements]
 
     let canvas = PKCanvasView()
-    private let pagesView = PagesBackgroundView()
-    private let contentLayer = ElementsLayerView(kind: .content)
-    private let tapeLayer = ElementsLayerView(kind: .tapes)
-    private let sketch = SketchOverlayView()
-    private let selection = SelectionOverlayView()
-    private let toolStrip: ToolStripView
-    private let selectionBar = UIStackView()
-    private let pageLabel = UILabel()
-    private let pagePill = UIView()
-    private let panel = PagePanelView()
-    private var panelLeading: NSLayoutConstraint!
+    let pagesView = PagesBackgroundView()
+    let contentLayer = ElementsLayerView(kind: .content)
+    let tapeLayer = ElementsLayerView(kind: .tapes)
+    let sketch = SketchOverlayView()
+    let selection = SelectionOverlayView()
+    let contextBar: ContextToolBar
+    let toolbar = EditorToolbar()
+    let chromeBackdrop = UIView()
+    let undoPill = ChromePill()
+    let undoButton = ChromeButton.make("arrow.uturn.backward", L("action.undo"))
+    let redoButton = ChromeButton.make("arrow.uturn.forward", L("action.redo"))
+    /// Rangée flottante sous la barre : annuler, réglages de l'outil, enregistrement.
+    let contextRow = UIView()
+    let audioSlot = UIStackView()
+    let selectionPill = ChromePill()
+    var selectionBar: UIStackView { selectionPill.stack }
+    /// Lecture seule : outils masqués, rien ne s'écrit par erreur pendant la relecture.
+    var readOnly = false
+    /// Boutons d'ancrage des menus et du partage.
+    weak var shareSource: UIView?
+    let pageLabel = UILabel()
+    let pagePill = UIView()
+    let panel = PagePanelView()
+    var panelLeading: NSLayoutConstraint?
     private(set) var tabBar: DocumentTabsView!
-    private var undoItem: UIBarButtonItem!
-    private var redoItem: UIBarButtonItem!
 
-    private var tools: ToolState
-    private var editingColorIndex: Int?
-    private var fingerDraws: Bool {
+    var tools: ToolState
+    var editingColorIndex: Int?
+    var fingerDraws: Bool {
         get { UserDefaults.standard.bool(forKey: "nooty.fingerDraws") }
         set { UserDefaults.standard.set(newValue, forKey: "nooty.fingerDraws") }
     }
 
-    private lazy var toolPan = UIPanGestureRecognizer(target: self, action: #selector(handleToolPan(_:)))
-    private lazy var toolTap = UITapGestureRecognizer(target: self, action: #selector(handleToolTap(_:)))
+    lazy var toolPan = UIPanGestureRecognizer(target: self, action: #selector(handleToolPan(_:)))
+    lazy var toolTap = UITapGestureRecognizer(target: self, action: #selector(handleToolTap(_:)))
 
     // Sélection et édition d'éléments
-    private var selected: (page: Int, id: UUID)?
-    private var gestureSnapshot: [PageElements]?
-    private var textEditor: UITextView?
-    private var editingText: (page: Int, id: UUID)?
+    var selected: (page: Int, id: UUID)?
+    var gestureSnapshot: [PageElements]?
+    var textEditor: UITextView?
+    var editingText: (page: Int, id: UUID)?
 
     // Outils à geste
-    private var panStart: CGPoint = .zero
-    private var panPoints: [CGPoint] = []
+    var panStart: CGPoint = .zero
+    var panPoints: [CGPoint] = []
 
     // Enregistrement
-    private var pendingSave: DispatchWorkItem?
-    private var changeGeneration = 0
-    private var savedGeneration = 0
-    private var contentChanged = false
-    private var isApplyingDrawing = false
-    private var didInitialLayout = false
-    private var didAppear = false
-    private var damagedPages = 0
-    private var lastStrokeCount = 0
-    private var saveErrorShown = false
-    private lazy var lastSavedPageIndex = manifest.lastPageIndex
-    private var indexDirty = false
+    var pendingSave: DispatchWorkItem?
+    var changeGeneration = 0
+    var savedGeneration = 0
+    var contentChanged = false
+    var isApplyingDrawing = false
+    var didInitialLayout = false
+    var didAppear = false
+    var damagedPages = 0
+    var lastStrokeCount = 0
+    var saveErrorShown = false
+    lazy var lastSavedPageIndex = manifest.lastPageIndex
+    var indexDirty = false
 
     var audioController: AudioController?
     /// Dessin complet mis de côté pendant la relecture synchronisée avec l'audio.
-    private var replayFull: PKDrawing?
+    var replayFull: PKDrawing?
 
     /// Dessin réel du bloc-notes, y compris pendant une relecture.
     var fullDrawing: PKDrawing { replayFull ?? canvas.drawing }
@@ -86,7 +97,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         damagedPages = opened.damagedPages
         let initialTools = ToolState.load()
         tools = initialTools
-        toolStrip = ToolStripView(state: initialTools)
+        contextBar = ContextToolBar(state: initialTools)
         super.init(nibName: nil, bundle: nil)
 
         isApplyingDrawing = true
@@ -106,10 +117,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = Theme.desk
-        navigationItem.largeTitleDisplayMode = .never
-        navigationItem.style = .editor
-        navigationItem.renameDelegate = self
+        view.backgroundColor = Theme.editorDesk
         title = entry?.title
 
         pagesView.resources = store.resourcesDirectory
@@ -152,42 +160,61 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         toolTap.delegate = self
         canvas.addGestureRecognizer(toolTap)
 
-        toolStrip.translatesAutoresizingMaskIntoConstraints = false
-        toolStrip.onChange = { [weak self] state in
-            self?.tools = state
-            state.save()
-            self?.applyTool()
-        }
-        toolStrip.onEditColor = { [weak self] index, color, source in self?.editColor(at: index, current: color, source: source) }
-        toolStrip.onEditWidth = { [weak self] index, source in self?.editWidth(at: index, source: source) }
-        view.addSubview(toolStrip)
+        contextBar.onChange = { [weak self] state in self?.applyToolState(state) }
+        contextBar.onEditColor = { [weak self] index, color, source in self?.editColor(at: index, current: color, source: source) }
+        contextBar.onEditWidth = { [weak self] index, source in self?.presentWidthMenu(index: index, from: source) }
+        contextBar.onToolMenu = { [weak self] source in self?.presentToolMenu(from: source) }
+        contextBar.onFontMenu = { [weak self] source in self?.presentFontMenu(from: source) }
+        contextBar.onTextSize = { [weak self] delta in self?.changeTextSize(by: delta) }
+        contextBar.textStyle = (TextDefaults.font, TextDefaults.size)
 
+        // Habillage : fond sombre sous la barre d'état, onglets, barre principale.
+        chromeBackdrop.backgroundColor = Theme.chromeDeep
         tabBar = DocumentTabsView(library: library, current: itemID)
-        tabBar.translatesAutoresizingMaskIntoConstraints = false
+        tabBar.onHome = { [weak self] in self?.goHome() }
         tabBar.onSelect = { [weak self] id in self?.switchToTab(id) }
         tabBar.onClose = { [weak self] id in self?.closeTab(id) }
-        view.addSubview(tabBar)
+        tabBar.activeMenu = { [weak self] in self?.documentMenu() ?? UIMenu() }
+        tabBar.reload()
+        for v in [chromeBackdrop, tabBar!, toolbar] as [UIView] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            v.overrideUserInterfaceStyle = .dark
+            view.addSubview(v)
+        }
 
-        selectionBar.axis = .horizontal
-        selectionBar.spacing = 2
-        selectionBar.isHidden = true
-        let barHolder = UIView()
-        Theme.style(panel: barHolder, radius: 14)
-        barHolder.translatesAutoresizingMaskIntoConstraints = false
-        selectionBar.translatesAutoresizingMaskIntoConstraints = false
-        barHolder.addSubview(selectionBar)
-        view.addSubview(barHolder)
-        selectionHolder = barHolder
+        undoButton.addAction(UIAction { [weak self] _ in
+            self?.commitTextEditing()
+            self?.canvas.undoManager?.undo()
+            self?.refreshUndoButtons()
+        }, for: .primaryActionTriggered)
+        redoButton.addAction(UIAction { [weak self] _ in
+            self?.canvas.undoManager?.redo()
+            self?.refreshUndoButtons()
+        }, for: .primaryActionTriggered)
+        undoPill.stack.addArrangedSubview(undoButton)
+        undoPill.stack.addArrangedSubview(redoButton)
+        audioSlot.axis = .horizontal
+        for v in [undoPill, contextBar, audioSlot] as [UIView] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            contextRow.addSubview(v)
+        }
+        contextRow.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(contextRow)
+
+        selectionPill.isHidden = true
+        selectionPill.frame = CGRect(x: 0, y: 0, width: 200, height: 52)
+        view.addSubview(selectionPill)
+        selectionHolder = selectionPill
 
         // Indicateur de page : une pastille qui contient le texte, dimensionnée par ses contraintes.
         pageLabel.translatesAutoresizingMaskIntoConstraints = false
-        pageLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: 13, weight: .semibold))
+        pageLabel.font = Theme.rounded(13, .semibold, style: .footnote)
         pageLabel.adjustsFontForContentSizeCategory = true
-        pageLabel.textColor = .white
+        pageLabel.textColor = Theme.chromeText
         pageLabel.text = L("page.position", 1, manifest.pages.count)
         pagePill.translatesAutoresizingMaskIntoConstraints = false
-        pagePill.backgroundColor = Theme.ink.withAlphaComponent(0.82)
-        pagePill.layer.cornerRadius = 13
+        pagePill.backgroundColor = Theme.chrome.withAlphaComponent(0.9)
+        pagePill.layer.cornerRadius = 14
         pagePill.layer.cornerCurve = .continuous
         pagePill.addSubview(pageLabel)
         pagePill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(promptGoToPage)))
@@ -202,59 +229,46 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         view.addSubview(panel)
 
         let guide = view.safeAreaLayoutGuide
-        panelLeading = panel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: -320)
+        panelLeading = panel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: -340)
+        let barCentered = contextBar.centerXAnchor.constraint(equalTo: contextRow.centerXAnchor)
+        barCentered.priority = .defaultLow
         NSLayoutConstraint.activate([
+            chromeBackdrop.topAnchor.constraint(equalTo: view.topAnchor),
+            chromeBackdrop.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            chromeBackdrop.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            chromeBackdrop.bottomAnchor.constraint(equalTo: tabBar.bottomAnchor),
             tabBar.topAnchor.constraint(equalTo: guide.topAnchor),
-            tabBar.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
-            tabBar.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
-            toolStrip.topAnchor.constraint(equalTo: tabBar.bottomAnchor, constant: 6),
-            toolStrip.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
-            toolStrip.leadingAnchor.constraint(greaterThanOrEqualTo: guide.leadingAnchor, constant: 10),
-            toolStrip.trailingAnchor.constraint(lessThanOrEqualTo: guide.trailingAnchor, constant: -10),
-            barHolder.topAnchor.constraint(equalTo: toolStrip.bottomAnchor, constant: 8),
-            barHolder.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
-            selectionBar.topAnchor.constraint(equalTo: barHolder.topAnchor, constant: 4),
-            selectionBar.bottomAnchor.constraint(equalTo: barHolder.bottomAnchor, constant: -4),
-            selectionBar.leadingAnchor.constraint(equalTo: barHolder.leadingAnchor, constant: 6),
-            selectionBar.trailingAnchor.constraint(equalTo: barHolder.trailingAnchor, constant: -6),
-            pageLabel.topAnchor.constraint(equalTo: pagePill.topAnchor, constant: 5),
-            pageLabel.bottomAnchor.constraint(equalTo: pagePill.bottomAnchor, constant: -5),
-            pageLabel.leadingAnchor.constraint(equalTo: pagePill.leadingAnchor, constant: 12),
-            pageLabel.trailingAnchor.constraint(equalTo: pagePill.trailingAnchor, constant: -12),
+            tabBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tabBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            toolbar.topAnchor.constraint(equalTo: tabBar.bottomAnchor),
+            toolbar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            toolbar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            contextRow.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 10),
+            contextRow.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
+            contextRow.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -12),
+            contextRow.heightAnchor.constraint(equalToConstant: 52),
+            undoPill.leadingAnchor.constraint(equalTo: contextRow.leadingAnchor),
+            undoPill.topAnchor.constraint(equalTo: contextRow.topAnchor),
+            contextBar.topAnchor.constraint(equalTo: contextRow.topAnchor),
+            contextBar.leadingAnchor.constraint(greaterThanOrEqualTo: undoPill.trailingAnchor, constant: 10),
+            contextBar.trailingAnchor.constraint(lessThanOrEqualTo: audioSlot.leadingAnchor, constant: -10),
+            barCentered,
+            audioSlot.trailingAnchor.constraint(equalTo: contextRow.trailingAnchor),
+            audioSlot.topAnchor.constraint(equalTo: contextRow.topAnchor),
+            pageLabel.topAnchor.constraint(equalTo: pagePill.topAnchor, constant: 6),
+            pageLabel.bottomAnchor.constraint(equalTo: pagePill.bottomAnchor, constant: -6),
+            pageLabel.leadingAnchor.constraint(equalTo: pagePill.leadingAnchor, constant: 14),
+            pageLabel.trailingAnchor.constraint(equalTo: pagePill.trailingAnchor, constant: -14),
             pagePill.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
             pagePill.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -12),
-            panel.topAnchor.constraint(equalTo: view.topAnchor),
+            panel.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
             panel.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            panel.widthAnchor.constraint(equalToConstant: 300),
-            panelLeading,
+            panel.widthAnchor.constraint(equalToConstant: 320),
+            panelLeading!,
         ])
-
-        undoItem = UIBarButtonItem(title: L("action.undo"), image: UIImage(systemName: "arrow.uturn.backward"), primaryAction: UIAction { [weak self] _ in
-            self?.commitTextEditing()
-            self?.canvas.undoManager?.undo()
-            self?.refreshUndoButtons()
-        })
-        redoItem = UIBarButtonItem(title: L("action.redo"), image: UIImage(systemName: "arrow.uturn.forward"), primaryAction: UIAction { [weak self] _ in
-            self?.canvas.undoManager?.redo()
-            self?.refreshUndoButtons()
-        })
-        let panelItem = UIBarButtonItem(title: L("panel.pages"), image: UIImage(systemName: "sidebar.left"), primaryAction: UIAction { [weak self] _ in self?.togglePanel() })
-        let searchItem = UIBarButtonItem(title: L("search.title"), image: UIImage(systemName: "magnifyingglass"), primaryAction: UIAction { [weak self] _ in self?.presentSearch() })
-        let insert = UIBarButtonItem(title: L("insert.title"), image: UIImage(systemName: "plus.circle"), primaryAction: nil, menu: UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak self] done in done(self?.insertActions() ?? []) },
-        ]))
-        let addPage = UIBarButtonItem(title: L("page.add"), image: UIImage(systemName: "doc.badge.plus"), primaryAction: nil, menu: UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak self] done in done(self?.addPageActions() ?? []) },
-        ]))
-        let share = UIBarButtonItem(title: L("export.title"), image: UIImage(systemName: "square.and.arrow.up"), primaryAction: nil, menu: UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak self] done in done(self?.exportActions() ?? []) },
-        ]))
-        let more = UIBarButtonItem(title: L("action.more"), image: UIImage(systemName: "ellipsis.circle"), primaryAction: nil, menu: UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak self] done in done(self?.moreActions() ?? []) },
-        ]))
-        navigationItem.leftItemsSupplementBackButton = true
-        navigationItem.leftBarButtonItems = [panelItem, searchItem]
-        navigationItem.rightBarButtonItems = [more, share, addPage, insert, redoItem, undoItem]
+        // Le contexte se rétrécit avant de chevaucher l'enregistrement.
+        contextBar.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        rebuildToolbar()
 
         pagesView.setPages(manifest.pages, layout: layout)
         refreshElementLayers()
@@ -270,7 +284,14 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         audioController = AudioController(editor: self)
     }
 
-    private var selectionHolder: UIView!
+    var selectionHolder: UIView!
+
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: animated)
+    }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -290,6 +311,9 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         commitTextEditing()
+        if navigationController?.topViewController !== self {
+            navigationController?.setNavigationBarHidden(false, animated: animated)
+        }
         guard isMovingFromParent || isBeingDismissed || navigationController?.viewControllers.contains(self) == false else { return }
         closeDocument()
     }
@@ -328,11 +352,11 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Outils
 
-    private func applyTool() {
+    func applyTool() {
         canvas.tool = tools.pkTool
         let custom = !tools.kind.usesInk
-        canvas.drawingGestureRecognizer.isEnabled = !custom
-        toolPan.isEnabled = [.shape, .tape, .laser].contains(tools.kind)
+        canvas.drawingGestureRecognizer.isEnabled = !custom && !readOnly
+        toolPan.isEnabled = !readOnly && [.shape, .tape, .laser].contains(tools.kind)
         let pencil = NSNumber(value: UITouch.TouchType.pencil.rawValue)
         let finger = NSNumber(value: UITouch.TouchType.direct.rawValue)
         toolPan.allowedTouchTypes = fingerDraws ? [pencil, finger] : [pencil]
@@ -350,12 +374,12 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         if tools.kind != .text { commitTextEditing() }
     }
 
-    private func applyInputPolicy() {
+    func applyInputPolicy() {
         canvas.drawingPolicy = fingerDraws ? .anyInput : .pencilOnly
         applyTool()
     }
 
-    private func editColor(at index: Int, current: UIColor, source: UIView) {
+    func editColor(at index: Int, current: UIColor, source: UIView) {
         editingColorIndex = index
         let picker = UIColorPickerViewController()
         picker.selectedColor = current
@@ -373,7 +397,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         rgba.a = 1
         tools.setColor(String(rgba.hex.prefix(7)), at: index)
         tools.save()
-        toolStrip.state = tools
+        contextBar.state = tools
         applyTool()
     }
 
@@ -381,23 +405,9 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         editingColorIndex = nil
     }
 
-    private func editWidth(at index: Int, source: UIView) {
-        let slider = WidthSliderViewController(value: tools.widths[index], range: ToolState.widthRange) { [weak self] value in
-            guard let self else { return }
-            self.tools.setWidth(value, at: index)
-            self.tools.save()
-            self.toolStrip.state = self.tools
-            self.applyTool()
-        }
-        slider.modalPresentationStyle = .popover
-        slider.popoverPresentationController?.sourceView = source
-        slider.popoverPresentationController?.sourceRect = source.bounds
-        present(slider, animated: true)
-    }
-
-    private func refreshUndoButtons() {
-        undoItem?.isEnabled = canvas.undoManager?.canUndo ?? false
-        redoItem?.isEnabled = canvas.undoManager?.canRedo ?? false
+    func refreshUndoButtons() {
+        undoButton.isEnabled = canvas.undoManager?.canUndo ?? false
+        redoButton.isEnabled = canvas.undoManager?.canRedo ?? false
     }
 
     // MARK: - Renommage et onglets
@@ -408,7 +418,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         tabBar.reload()
     }
 
-    private func switchToTab(_ id: UUID) {
+    func switchToTab(_ id: UUID) {
         guard id != itemID, let nav = navigationController, let target = library.index.item(id) else { return }
         commitTextEditing()
         LibraryViewController.makeEditor(for: target, library: library, from: self) { editor in
@@ -421,7 +431,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func closeTab(_ id: UUID) {
+    func closeTab(_ id: UUID) {
         if id == itemID {
             library.closeTab(id)
             navigationController?.popViewController(animated: true)
@@ -433,13 +443,14 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Disposition et défilement
 
-    private func updateContentSize() {
+    func updateContentSize() {
         canvas.contentSize = CGSize(width: CGFloat(layout.width) * canvas.zoomScale, height: CGFloat(layout.height) * canvas.zoomScale)
     }
 
-    private var topChrome: CGFloat { (tabBar?.isHidden == false ? 40 : 0) + 58 + 20 }
+    /// Hauteur couverte par l'habillage : onglets, barre principale, rangée de réglages.
+    var topChrome: CGFloat { 46 + 56 + (readOnly ? 12 : 52 + 22) }
 
-    private func updateInsets() {
+    func updateInsets() {
         let horizontal = max(12, (canvas.bounds.width - canvas.contentSize.width) / 2)
         let inset = UIEdgeInsets(
             top: view.safeAreaInsets.top + topChrome, left: horizontal,
@@ -448,7 +459,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         if canvas.contentInset != inset { canvas.contentInset = inset }
     }
 
-    private func fitWidth() {
+    func fitWidth() {
         guard layout.width > 0 else { return }
         let target = (view.bounds.width - 24) / CGFloat(layout.width)
         canvas.setZoomScale(min(canvas.maximumZoomScale, max(canvas.minimumZoomScale, target)), animated: false)
@@ -457,7 +468,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         syncLayers()
     }
 
-    private func syncLayers() {
+    func syncLayers() {
         let origin = CGPoint(x: -canvas.contentOffset.x, y: -canvas.contentOffset.y)
         pagesView.place(origin: origin, scale: canvas.zoomScale)
         contentLayer.place(offset: canvas.contentOffset, scale: canvas.zoomScale)
@@ -500,17 +511,17 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     }
 
     /// Point de la surface d'écriture (points de page empilés) sous un geste.
-    private func surfacePoint(_ g: UIGestureRecognizer) -> CGPoint {
+    func surfacePoint(_ g: UIGestureRecognizer) -> CGPoint {
         let p = g.location(in: canvas)
         return CGPoint(x: p.x / canvas.zoomScale, y: p.y / canvas.zoomScale)
     }
 
     /// Conversion surface → vue de l'éditeur.
-    private func viewPoint(_ p: CGPoint) -> CGPoint {
+    func viewPoint(_ p: CGPoint) -> CGPoint {
         canvas.convert(CGPoint(x: p.x * canvas.zoomScale, y: p.y * canvas.zoomScale), to: view)
     }
 
-    private func pageOrigin(_ index: Int) -> CGPoint {
+    func pageOrigin(_ index: Int) -> CGPoint {
         guard layout.frames.indices.contains(index) else { return .zero }
         return CGPoint(x: layout.frames[index].x, y: layout.frames[index].y)
     }
@@ -538,7 +549,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     }
 
     /// Forme reconnue si le stylet est resté immobile à la fin du trait.
-    private func heldShape(_ stroke: PKStroke) -> ShapeSpec? {
+    func heldShape(_ stroke: PKStroke) -> ShapeSpec? {
         let path = stroke.path
         guard path.count >= 8, let lastPoint = path.last else { return nil }
         let end = lastPoint.timeOffset
@@ -556,7 +567,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     }
 
     /// Dessiner puis maintenir le stylet immobile : le trait est remplacé par la forme reconnue.
-    private func convertHeldStroke(_ stroke: PKStroke) {
+    func convertHeldStroke(_ stroke: PKStroke) {
         guard let spec = heldShape(stroke) else { return }
         var drawing = canvas.drawing
         // Retire précisément le trait maintenu (même graine, même date), où qu'il soit.
@@ -568,7 +579,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         replaceDrawing(drawing, actionName: L("shape.title"))
     }
 
-    private func shapeStrokes(_ spec: ShapeSpec, ink: PKInk, width: CGFloat) -> [PKStroke] {
+    func shapeStrokes(_ spec: ShapeSpec, ink: PKInk, width: CGFloat) -> [PKStroke] {
         let start = Date()
         return spec.polylines().map { line in
             let points = line.enumerated().map { i, p in
@@ -599,7 +610,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Éléments
 
-    private func refreshElementLayers() {
+    func refreshElementLayers() {
         var hidden = Set<UUID>()
         if let editingText { hidden.insert(editingText.id) }
         contentLayer.update(elements: elements, layout: layout, hidden: hidden)
@@ -629,7 +640,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         return elements[page].first { $0.id == id }
     }
 
-    private func updateElement(_ page: Int, _ id: UUID, live: Bool = false, _ change: (inout PageElement) -> Void) {
+    func updateElement(_ page: Int, _ id: UUID, live: Bool = false, _ change: (inout PageElement) -> Void) {
         guard elements.indices.contains(page), let i = elements[page].firstIndex(where: { $0.id == id }) else { return }
         var copy = elements
         change(&copy[page][i])
@@ -643,7 +654,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     }
 
     /// Élément (hors rubans) sous un point de la surface, le plus haut d'abord.
-    private func hitElement(at p: CGPoint) -> (page: Int, id: UUID)? {
+    func hitElement(at p: CGPoint) -> (page: Int, id: UUID)? {
         let page = layout.pageIndex(atY: Double(p.y))
         guard elements.indices.contains(page) else { return nil }
         let o = pageOrigin(page)
@@ -672,7 +683,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     }
 
     /// Rectangle centré dans la partie visible de la page courante.
-    private func visibleCenter(on page: Int) -> CGPoint {
+    func visibleCenter(on page: Int) -> CGPoint {
         let o = pageOrigin(page)
         let mid = CGPoint(x: (canvas.contentOffset.x + canvas.bounds.width / 2) / canvas.zoomScale, y: (canvas.contentOffset.y + canvas.bounds.height / 2) / canvas.zoomScale)
         let info = manifest.pages[page]
@@ -697,13 +708,12 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     }
 
     func setTool(_ kind: ToolKind) {
-        tools.kind = kind
-        tools.save()
-        toolStrip.state = tools
-        applyTool()
+        var next = tools
+        next.kind = kind
+        applyToolState(next)
     }
 
-    private func insertTextBox(sticky: Bool, at point: CGPoint? = nil) {
+    func insertTextBox(sticky: Bool, at point: CGPoint? = nil) {
         let page = point.map { layout.pageIndex(atY: Double($0.y)) } ?? currentPageIndex()
         let o = pageOrigin(page)
         let local = point.map { CGPoint(x: $0.x - o.x, y: $0.y - o.y) } ?? visibleCenter(on: page)
@@ -712,14 +722,14 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         let y = point == nil ? Double(local.y) - Double(size.height) / 2 : Double(local.y) - 22
         let element = TextElement(
             frame: Rect(x: x, y: y, width: Double(size.width), height: Double(size.height)),
-            fontSize: sticky ? 18 : 17, color: sticky ? .ink : tools.currentRGBA,
+            font: TextDefaults.font, fontSize: TextDefaults.size, color: sticky ? .ink : tools.currentRGBA,
             fill: sticky ? RGBA(hex: "#FFE98A") : nil
         )
         insertElement(.text(element), page: page, select: false)
         beginTextEditing(page: page, id: element.id)
     }
 
-    private func toggleTape(page: Int, id: UUID) {
+    func toggleTape(page: Int, id: UUID) {
         updateElement(page, id, live: false) { e in
             if case var .tape(t) = e {
                 t.revealed.toggle()
@@ -728,7 +738,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func setAllTapes(revealed: Bool) {
+    func setAllTapes(revealed: Bool) {
         var copy = elements
         for p in copy.indices {
             for i in copy[p].indices {
@@ -743,7 +753,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Sélection
 
-    private func configureSelection() {
+    func configureSelection() {
         selection.onMove = { [weak self] delta in
             guard let self, let s = self.selected else { return }
             let z = Double(self.canvas.zoomScale)
@@ -780,7 +790,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func selectElement(_ page: Int, _ id: UUID) {
+    func selectElement(_ page: Int, _ id: UUID) {
         selected = (page, id)
         updateSelectionBox()
         rebuildSelectionBar()
@@ -793,7 +803,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         selectionHolder?.isHidden = true
     }
 
-    private func updateSelectionBox() {
+    func updateSelectionBox() {
         guard let s = selected, let e = element(s.page, s.id) else {
             selection.box = .zero
             return
@@ -814,12 +824,27 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
             selection.rotation = 0
             selection.keepsAspect = false
         }
+        positionSelectionPill()
     }
 
-    private func barButton(_ symbol: String, _ label: String, destructive: Bool = false, action: @escaping () -> Void) -> UIButton {
+    /// La barre d'actions flotte sous l'élément choisi, ou au-dessus s'il touche le bas.
+    func positionSelectionPill() {
+        guard !selectionPill.isHidden, selection.box != .zero else { return }
+        var size = selectionPill.stack.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
+        size.width += 12
+        let box = selection.box
+        let bounds = view.bounds
+        let x = min(max(12, box.midX - size.width / 2), bounds.width - 12 - size.width)
+        var y = box.maxY + 34
+        if y + size.height > bounds.height - view.safeAreaInsets.bottom - 16 { y = box.minY - size.height - 34 }
+        y = max(contextRow.frame.maxY + 10, y)
+        selectionPill.frame = CGRect(x: x, y: y, width: size.width, height: 52)
+    }
+
+    func barButton(_ symbol: String, _ label: String, destructive: Bool = false, action: @escaping () -> Void) -> UIButton {
         var config = UIButton.Configuration.plain()
         config.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .medium))
-        config.baseForegroundColor = destructive ? .systemRed : Theme.text
+        config.baseForegroundColor = destructive ? Theme.danger : Theme.chromeText
         let b = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
         b.accessibilityLabel = label
         b.toolTip = label
@@ -828,13 +853,14 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         return b
     }
 
-    private func rebuildSelectionBar() {
+    func rebuildSelectionBar() {
         selectionBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
         guard let s = selected, let e = element(s.page, s.id) else {
             selectionHolder.isHidden = true
             return
         }
         selectionHolder.isHidden = false
+        defer { positionSelectionPill() }
         if case .text = e {
             selectionBar.addArrangedSubview(barButton("character.cursor.ibeam", L("element.editText")) { [weak self] in
                 self?.beginTextEditing(page: s.page, id: s.id)
@@ -852,7 +878,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         selectionBar.addArrangedSubview(barButton("trash", L("common.delete"), destructive: true) { [weak self] in self?.deleteSelected() })
     }
 
-    private func duplicateSelected() {
+    func duplicateSelected() {
         guard let s = selected, let e = element(s.page, s.id) else { return }
         var copy = e
         var f = copy.frame
@@ -866,7 +892,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         insertElement(copy, page: s.page)
     }
 
-    private func reorderSelected(toFront: Bool) {
+    func reorderSelected(toFront: Bool) {
         guard let s = selected, elements.indices.contains(s.page), let i = elements[s.page].firstIndex(where: { $0.id == s.id }) else { return }
         var copy = elements
         let e = copy[s.page].remove(at: i)
@@ -874,7 +900,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         setElements(copy, actionName: L("element.edit"))
     }
 
-    private func deleteSelected() {
+    func deleteSelected() {
         guard let s = selected else { return }
         var copy = elements
         copy[s.page].removeAll { $0.id == s.id }
@@ -882,7 +908,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         setElements(copy, actionName: L("common.delete"))
     }
 
-    private func presentCrop(page: Int, id: UUID) {
+    func presentCrop(page: Int, id: UUID) {
         guard case let .image(img)? = element(page, id), let image = ImageCache.shared.image(store.resourceURL(img.resource)) else { return }
         let crop = ImageCropViewController(image: image, crop: img.crop) { [weak self] newCrop in
             self?.updateElement(page, id) { e in
@@ -900,7 +926,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         present(nav, animated: true)
     }
 
-    private func saveToCollection(page: Int, id: UUID) {
+    func saveToCollection(page: Int, id: UUID) {
         guard case let .image(img)? = element(page, id), let data = try? Data(contentsOf: store.resourceURL(img.resource)) else { return }
         ElementCollection.shared.add(data)
         showAlert(L("collection.title"), L("collection.saved"))
@@ -916,6 +942,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         if g === toolTap {
             let p = surfacePoint(g)
             if audioController?.isPlaybackMode == true { return true }
+            if readOnly { return false }
             if tools.kind == .text { return true }
             if textEditor != nil { return true }
             return hitElement(at: p) != nil || selected != nil
@@ -1006,13 +1033,13 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func tapeRect(from a: CGPoint, to b: CGPoint) -> CGRect {
+    func tapeRect(from a: CGPoint, to b: CGPoint) -> CGRect {
         let h = max(14, abs(b.y - a.y))
         let y = abs(b.y - a.y) < 14 ? a.y - 7 : min(a.y, b.y)
         return CGRect(x: min(a.x, b.x), y: y, width: abs(b.x - a.x), height: h)
     }
 
-    private func viewPath(_ lines: [[(x: Double, y: Double)]]) -> CGPath {
+    func viewPath(_ lines: [[(x: Double, y: Double)]]) -> CGPath {
         let path = UIBezierPath()
         for line in lines {
             for (i, q) in line.enumerated() {
@@ -1025,7 +1052,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Édition de texte
 
-    private func beginTextEditing(page: Int, id: UUID) {
+    func beginTextEditing(page: Int, id: UUID) {
         commitTextEditing()
         guard case let .text(t)? = element(page, id) else { return }
         clearSelection()
@@ -1063,7 +1090,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         if let t = editingTextElement() { applyTextStyle(t) }
     }
 
-    private func applyTextStyle(_ t: TextElement) {
+    func applyTextStyle(_ t: TextElement) {
         guard let tv = textEditor else { return }
         let z = canvas.zoomScale
         // Attributs calculés directement : une chaîne vide n'a pas d'attributs à lire.
@@ -1076,7 +1103,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         positionTextEditor()
     }
 
-    private func positionTextEditor() {
+    func positionTextEditor() {
         guard let tv = textEditor, let e = editingText, let element = element(e.page, e.id) else { return }
         let o = pageOrigin(e.page)
         let f = element.frame
@@ -1133,8 +1160,8 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         clearSelection()
         replayFull = canvas.drawing
         canvas.drawingGestureRecognizer.isEnabled = false
-        toolStrip.isUserInteractionEnabled = false
-        toolStrip.alpha = 0.5
+        contextRow.isUserInteractionEnabled = false
+        contextRow.alpha = 0.5
     }
 
     func updateReplay(wall: Double) {
@@ -1153,8 +1180,8 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         canvas.drawing = full
         isApplyingDrawing = false
         lastStrokeCount = full.strokes.count
-        toolStrip.isUserInteractionEnabled = true
-        toolStrip.alpha = 1
+        contextRow.isUserInteractionEnabled = true
+        contextRow.alpha = 1
         applyTool()
     }
 
@@ -1199,7 +1226,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         scrollToPage(min(index, manifest.pages.count - 1), animated: true)
     }
 
-    private func blankPage(like index: Int, template: BackgroundKind? = nil) -> PageInfo {
+    func blankPage(like index: Int, template: BackgroundKind? = nil) -> PageInfo {
         let model = manifest.pages[min(max(0, index), manifest.pages.count - 1)]
         var bg = model.background
         if let template {
@@ -1209,40 +1236,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         return PageInfo(width: model.width, height: model.height, background: bg)
     }
 
-    private func addPageActions() -> [UIMenuElement] {
-        let current = currentPageIndex()
-        let templates = UIMenu(title: L("page.addTemplate"), image: UIImage(systemName: "doc.plaintext"), children: NewNotebookViewController.templates.map { kind, key in
-            UIAction(title: L(key)) { [weak self] _ in
-                guard let self else { return }
-                self.insertPages([self.blankPage(like: current, template: kind)], at: current + 1)
-            }
-        })
-        return [
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: L("page.addAfter"), image: UIImage(systemName: "arrow.down.doc")) { [weak self] _ in
-                    guard let self else { return }
-                    self.insertPages([self.blankPage(like: current)], at: current + 1)
-                },
-                UIAction(title: L("page.addBefore"), image: UIImage(systemName: "arrow.up.doc")) { [weak self] _ in
-                    guard let self else { return }
-                    self.insertPages([self.blankPage(like: current)], at: current)
-                },
-                UIAction(title: L("page.addLast"), image: UIImage(systemName: "doc.badge.plus")) { [weak self] _ in
-                    guard let self else { return }
-                    self.insertPages([self.blankPage(like: current)], at: self.manifest.pages.count)
-                },
-                templates,
-            ]),
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: L("page.fromImage"), image: UIImage(systemName: "photo")) { [weak self] _ in self?.pickPhotos(asPages: true) },
-                UIAction(title: L("page.fromScan"), image: UIImage(systemName: "doc.viewfinder")) { [weak self] _ in self?.scanDocument() },
-                UIAction(title: L("page.fromCamera"), image: UIImage(systemName: "camera")) { [weak self] _ in self?.takePhoto(asPage: true) },
-                UIAction(title: L("page.fromPDF"), image: UIImage(systemName: "doc.richtext")) { [weak self] _ in self?.importPDFPages() },
-            ]),
-        ]
-    }
-
-    private func setTemplate(_ kind: BackgroundKind, page index: Int) {
+    func setTemplate(_ kind: BackgroundKind, page index: Int) {
         guard manifest.pages.indices.contains(index) else { return }
         let old = manifest.pages[index].background
         var next = Background.standard(kind)
@@ -1254,7 +1248,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         markChanged()
     }
 
-    private func setPaperColor(_ paper: PaperColor, page index: Int) {
+    func setPaperColor(_ paper: PaperColor, page index: Int) {
         guard manifest.pages.indices.contains(index) else { return }
         manifest.pages[index].background.color = paper.rgba
         pagesView.setPages(manifest.pages, layout: layout)
@@ -1277,7 +1271,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         present(alert, animated: true)
     }
 
-    private func clearPage(_ index: Int) {
+    func clearPage(_ index: Int) {
         let alert = UIAlertController(title: L("page.clearTitle"), message: L("page.clearMessage"), preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: L("common.cancel"), style: .cancel))
         alert.addAction(UIAlertAction(title: L("page.clear"), style: .destructive) { [weak self] _ in
@@ -1314,14 +1308,14 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func toggleBookmark(_ index: Int) {
+    func toggleBookmark(_ index: Int) {
         guard manifest.pages.indices.contains(index) else { return }
         manifest.pages[index].bookmarked.toggle()
         panel.reload()
         markChanged()
     }
 
-    private func promptPageTitle(_ index: Int) {
+    func promptPageTitle(_ index: Int) {
         guard manifest.pages.indices.contains(index) else { return }
         let alert = UIAlertController(title: L("outline.title"), message: L("outline.message"), preferredStyle: .alert)
         alert.addTextField { [weak self] field in
@@ -1339,7 +1333,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         present(alert, animated: true)
     }
 
-    @objc private func promptGoToPage() {
+    @objc func promptGoToPage() {
         let alert = UIAlertController(title: L("page.goTo"), message: L("page.goToMessage", manifest.pages.count), preferredStyle: .alert)
         alert.addTextField { field in
             field.keyboardType = .numberPad
@@ -1354,7 +1348,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     }
 
     /// Copie une page dans un autre bloc-notes (ajoutée à la fin).
-    private func copyPage(_ index: Int, to target: UUID) {
+    func copyPage(_ index: Int, to target: UUID) {
         saveNow(wait: true)
         let info = manifest.pages[index]
         let strokes = strokesByPage()[index]
@@ -1426,7 +1420,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Panneau des pages
 
-    private func togglePanel() {
+    func togglePanel() {
         commitTextEditing()
         let show = panel.isHidden
         if show {
@@ -1434,7 +1428,8 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
             panel.reload(dirty: true)
         }
         view.layoutIfNeeded()
-        panelLeading.constant = show ? 0 : -320
+        panelLeading?.constant = show ? 0 : -340
+        rebuildToolbar()
         UIView.animate(withDuration: 0.25, animations: { self.view.layoutIfNeeded() }, completion: { _ in
             if !show { self.panel.isHidden = true }
         })
@@ -1444,7 +1439,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     var panelPages: [PageInfo] { manifest.pages }
     var panelCurrentIndex: Int { currentPageIndex() }
 
-    private var panelStrokes: [[Stroke]]?
+    var panelStrokes: [[Stroke]]?
 
     func panelThumbnail(_ index: Int, width: CGFloat) -> UIImage? {
         if panelStrokes == nil || panelStrokes?.count != manifest.pages.count { panelStrokes = strokesByPage() }
@@ -1475,34 +1470,10 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Insertion
 
-    private func insertActions() -> [UIMenuElement] {
-        var collection: [UIMenuElement] = ElementCollection.shared.items().prefix(30).map { url in
-            UIAction(title: String(url.deletingPathExtension().lastPathComponent.prefix(8)) + "…", image: ElementCollection.shared.thumbnail(url)) { [weak self] _ in
-                if let image = UIImage(contentsOfFile: url.path) { self?.insertImage(image) }
-            }
-        }
-        if collection.isEmpty { collection = [UIAction(title: L("collection.empty"), attributes: .disabled) { _ in }] }
-        return [
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: L("insert.photos"), image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in self?.pickPhotos(asPages: false) },
-                UIAction(title: L("insert.camera"), image: UIImage(systemName: "camera")) { [weak self] _ in self?.takePhoto(asPage: false) },
-                UIAction(title: L("insert.files"), image: UIImage(systemName: "folder")) { [weak self] _ in self?.pickImageFile() },
-                UIAction(title: L("insert.paste"), image: UIImage(systemName: "doc.on.clipboard")) { [weak self] _ in
-                    if let image = UIPasteboard.general.image { self?.insertImage(image) }
-                },
-            ]),
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: L("insert.text"), image: UIImage(systemName: "textformat")) { [weak self] _ in self?.insertTextBox(sticky: false) },
-                UIAction(title: L("insert.sticky"), image: UIImage(systemName: "note.text")) { [weak self] _ in self?.insertTextBox(sticky: true) },
-            ]),
-            UIMenu(title: L("collection.title"), image: UIImage(systemName: "square.grid.2x2"), children: collection),
-        ]
-    }
+    var pickerAsPages = false
+    var pickerDelegateHolder: AnyObject?
 
-    private var pickerAsPages = false
-    private var pickerDelegateHolder: AnyObject?
-
-    private func pickPhotos(asPages: Bool) {
+    func pickPhotos(asPages: Bool) {
         var config = PHPickerConfiguration()
         config.filter = .images
         config.selectionLimit = asPages ? 50 : 10
@@ -1516,7 +1487,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         present(picker, animated: true)
     }
 
-    private func takePhoto(asPage: Bool) {
+    func takePhoto(asPage: Bool) {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
             showAlert(L("common.error"), L("insert.noCamera"))
             return
@@ -1532,7 +1503,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         present(picker, animated: true)
     }
 
-    private func pickImageFile() {
+    func pickImageFile() {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.image], asCopy: true)
         let delegate = DocumentPickerDelegate { [weak self] urls in
             for url in urls {
@@ -1544,7 +1515,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         present(picker, animated: true)
     }
 
-    private func scanDocument() {
+    func scanDocument() {
         guard VNDocumentCameraViewController.isSupported else {
             showAlert(L("common.error"), L("scan.unsupported"))
             return
@@ -1556,7 +1527,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         present(scanner, animated: true)
     }
 
-    private func addImagePages(_ images: [UIImage]) {
+    func addImagePages(_ images: [UIImage]) {
         do {
             let pages = try Importers.imagePages(images, into: store.directory)
             insertPages(pages, at: currentPageIndex() + 1)
@@ -1565,7 +1536,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func importPDFPages() {
+    func importPDFPages() {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.pdf], asCopy: true)
         let delegate = DocumentPickerDelegate { [weak self] urls in
             guard let self, let url = urls.first else { return }
@@ -1584,40 +1555,20 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Export
 
-    private func exportActions() -> [UIMenuElement] {
-        let current = currentPageIndex()
-        return [
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: L("export.allPDF"), image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
-                    guard let self else { return }
-                    self.exportPDF(pages: Array(self.manifest.pages.indices))
-                },
-                UIAction(title: L("export.allPDFNoPaper"), image: UIImage(systemName: "doc")) { [weak self] _ in
-                    guard let self else { return }
-                    self.exportPDF(pages: Array(self.manifest.pages.indices), paper: false)
-                },
-                UIAction(title: L("export.pagePDF"), image: UIImage(systemName: "doc.text")) { [weak self] _ in self?.exportPDF(pages: [current]) },
-                UIAction(title: L("export.pageImage"), image: UIImage(systemName: "photo")) { [weak self] _ in self?.exportImage(page: current) },
-            ]),
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: L("export.nooty"), image: UIImage(systemName: "shippingbox")) { [weak self] _ in self?.exportNooty() },
-                UIAction(title: L("export.print"), image: UIImage(systemName: "printer")) { [weak self] _ in self?.printPages() },
-            ]),
-        ]
-    }
-
-    private func pageBundle(_ indices: [Int]) -> [(info: PageInfo, strokes: [Stroke], elements: [PageElement])] {
+    func pageBundle(_ indices: [Int]) -> [(info: PageInfo, strokes: [Stroke], elements: [PageElement])] {
         let strokes = strokesByPage()
         return indices.filter { manifest.pages.indices.contains($0) }.map { (manifest.pages[$0], strokes[$0], elements[$0]) }
     }
 
-    private func shareFile(_ url: URL) {
+    func shareFile(_ url: URL) {
         let share = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        share.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItems?[1]
+        let source = shareSource ?? toolbar
+        share.popoverPresentationController?.sourceView = source
+        share.popoverPresentationController?.sourceRect = source.bounds
         present(share, animated: true)
     }
 
-    private var baseFileName: String { LibraryStore.safeFileName(entry?.title ?? "Nooty") }
+    var baseFileName: String { LibraryStore.safeFileName(entry?.title ?? "Nooty") }
 
     func exportPDF(pages: [Int], paper: Bool = true) {
         commitTextEditing()
@@ -1634,7 +1585,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func exportImage(page: Int) {
+    func exportImage(page: Int) {
         guard let p = pageBundle([page]).first else { return }
         let image = PageRenderer.image(info: p.info, strokes: p.strokes, elements: p.elements, resources: store.resourcesDirectory, width: CGFloat(p.info.width) * 3)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(baseFileName + " - p\(page + 1).png")
@@ -1646,7 +1597,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func exportNooty() {
+    func exportNooty() {
         saveNow(wait: true)
         do {
             shareFile(try library.exportNooty(itemID))
@@ -1655,7 +1606,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         }
     }
 
-    private func printPages() {
+    func printPages() {
         let data = PageRenderer.pdf(pages: pageBundle(Array(manifest.pages.indices)), resources: store.resourcesDirectory)
         let controller = UIPrintInteractionController.shared
         let info = UIPrintInfo(dictionary: nil)
@@ -1668,7 +1619,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Recherche et texte
 
-    private func presentSearch() {
+    func presentSearch() {
         commitTextEditing()
         saveNow(wait: true)
         let search = NotebookSearchViewController(editor: self)
@@ -1715,39 +1666,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Autres actions
 
-    private func moreActions() -> [UIMenuElement] {
-        let index = currentPageIndex()
-        let finger = UIAction(title: L("action.fingerDraws"), image: UIImage(systemName: "hand.draw"), state: fingerDraws ? .on : .off) { [weak self] _ in
-            guard let self else { return }
-            self.fingerDraws.toggle()
-            self.applyInputPolicy()
-        }
-        let hold = UIAction(title: L("shape.hold"), image: UIImage(systemName: "hand.point.up.left.and.text"), state: tools.holdToShape ? .on : .off) { [weak self] _ in
-            guard let self else { return }
-            self.tools.holdToShape.toggle()
-            self.tools.save()
-        }
-        let fit = UIAction(title: L("action.fit"), image: UIImage(systemName: "arrow.left.and.right")) { [weak self] _ in self?.fitWidth() }
-        let tapes = UIMenu(title: L("tape.label"), image: UIImage(systemName: "rectangle.fill.on.rectangle.fill"), children: [
-            UIAction(title: L("tape.revealAll"), image: UIImage(systemName: "eye")) { [weak self] _ in self?.setAllTapes(revealed: true) },
-            UIAction(title: L("tape.hideAll"), image: UIImage(systemName: "eye.slash")) { [weak self] _ in self?.setAllTapes(revealed: false) },
-        ])
-        return [
-            UIMenu(options: .displayInline, children: [
-                pageMenu(for: index),
-                UIAction(title: L("page.goTo"), image: UIImage(systemName: "arrow.forward.to.line")) { [weak self] _ in self?.promptGoToPage() },
-                UIAction(title: L("ocr.convert"), image: UIImage(systemName: "text.viewfinder")) { [weak self] _ in self?.convertHandwriting(page: index) },
-            ]),
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: L("cards.title"), image: UIImage(systemName: "rectangle.on.rectangle.angled")) { [weak self] _ in self?.presentFlashcards() },
-                UIAction(title: L("ai.title"), image: UIImage(systemName: "sparkles")) { [weak self] _ in self?.presentAssistant() },
-                tapes,
-            ]),
-            UIMenu(options: .displayInline, children: [fit, finger, hold]),
-        ]
-    }
-
-    private func convertHandwriting(page index: Int) {
+    func convertHandwriting(page index: Int) {
         let strokes = strokesByPage()[index]
         guard !strokes.isEmpty else {
             showAlert(L("ocr.convert"), L("ocr.empty"))
@@ -1829,7 +1748,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         if wait { store.queue.sync(execute: work) } else { store.queue.async(execute: work) }
     }
 
-    private func finishSave(_ outcome: Result<NotebookStore.SaveResult, Error>, generation: Int) {
+    func finishSave(_ outcome: Result<NotebookStore.SaveResult, Error>, generation: Int) {
         switch outcome {
         case .success:
             savedGeneration = max(savedGeneration, generation)
@@ -1854,7 +1773,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
 
     // MARK: - Miniature
 
-    private func makeThumbnail() -> UIImage? {
+    func makeThumbnail() -> UIImage? {
         guard let info = manifest.pages.first else { return nil }
         let strokes = strokesByPage().first ?? []
         return PageRenderer.image(info: info, strokes: strokes, elements: elements.first ?? [], resources: store.resourcesDirectory, width: 336)

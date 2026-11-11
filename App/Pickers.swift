@@ -272,7 +272,7 @@ final class TextFormatBar: UIToolbar {
     init(editor: NotebookViewController) {
         self.editor = editor
         super.init(frame: CGRect(x: 0, y: 0, width: 600, height: 48))
-        rebuild()
+        refresh()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) non utilisé") }
@@ -280,45 +280,55 @@ final class TextFormatBar: UIToolbar {
     private func item(_ symbol: String, _ label: String, on: Bool = false, _ action: @escaping () -> Void) -> UIBarButtonItem {
         let b = UIBarButtonItem(image: UIImage(systemName: symbol), primaryAction: UIAction { [weak self] _ in
             action()
-            self?.rebuild()
+            self?.refresh()
         })
         b.accessibilityLabel = label
         b.tintColor = on ? Theme.accent : Theme.text
         return b
     }
 
-    private func rebuild() {
+    func refresh() {
         guard let editor, let t = editor.editingTextElement() else { return }
-        let fonts = UIMenu(title: L("text.font"), options: .singleSelection, children: FontFamily.allCases.map { f in
-            UIAction(title: L("font.\(f.rawValue)"), state: f == t.font ? .on : .off) { [weak self] _ in
-                self?.editor?.changeEditingText { $0.font = f }
-                self?.rebuild()
-            }
-        })
         let align = UIMenu(title: L("text.alignment"), options: .singleSelection, children: [
             (TextAlignment.left, "text.alignleft"), (.center, "text.aligncenter"), (.right, "text.alignright"),
         ].map { a, symbol in
             UIAction(title: L("align.\(a.rawValue)"), image: UIImage(systemName: symbol), state: a == t.alignment ? .on : .off) { [weak self] _ in
                 self?.editor?.changeEditingText { $0.alignment = a }
-                self?.rebuild()
+                self?.refresh()
             }
         })
         let palette = ["#111111", "#1D2A44", "#C62828", "#2E7D32", "#1565C0", "#C2500F", "#7A4FB5"]
         let colors = UIMenu(title: L("text.color"), children: palette.compactMap { hex in
             guard let c = RGBA(hex: hex) else { return nil }
-            return UIAction(title: hex, image: Self.dot(InkConverter.uiColor(c)), state: c == t.color ? .on : .off) { [weak self] _ in
+            return UIAction(title: ColorNames.name(InkConverter.uiColor(c)), image: Self.dot(InkConverter.uiColor(c)), state: c == t.color ? .on : .off) { [weak self] _ in
                 self?.editor?.changeEditingText { $0.color = c }
-                self?.rebuild()
+                self?.refresh()
             }
         })
         let fills = UIMenu(title: L("text.fill"), children: [nil, "#FFE98A", "#BDE7C4", "#BFDCF7", "#F7C6DB", "#FFD6A5"].map { hex in
             let c = hex.flatMap(RGBA.init(hex:))
-            return UIAction(title: hex == nil ? L("text.noFill") : hex!, image: c.map { Self.dot(InkConverter.uiColor($0)) }, state: c == t.fill ? .on : .off) { [weak self] _ in
+            return UIAction(title: c.map { ColorNames.name(InkConverter.uiColor($0)) } ?? L("text.noFill"), image: c.map { Self.dot(InkConverter.uiColor($0)) }, state: c == t.fill ? .on : .off) { [weak self] _ in
                 self?.editor?.changeEditingText { $0.fill = c }
-                self?.rebuild()
+                self?.refresh()
             }
         })
-        let fontItem = UIBarButtonItem(title: L("font.\(t.font.rawValue)"), menu: fonts)
+        let fontItem = UIBarButtonItem(title: t.font.displayName)
+        fontItem.primaryAction = UIAction(title: t.font.displayName) { [weak self, weak fontItem] _ in
+            guard let self, let editor = self.editor else { return }
+            let menu = SheetMenuController(title: L("text.font"), width: 340) { [weak editor] _ in
+                FontFamily.Group.allCases.compactMap { group -> SheetMenuController.Section? in
+                    let fonts = FontFamily.available.filter { $0.group == group }
+                    guard !fonts.isEmpty else { return nil }
+                    return SheetMenuController.Section(group.title, fonts.map { family -> SheetMenuController.Item in
+                        .row(SheetMenuController.Row(family.displayName, accessory: .check(family == t.font), font: family.font(size: 19)) { [weak editor] in
+                            editor?.chooseFont(family)
+                        })
+                    })
+                }
+            }
+            SheetMenuController.present(menu, from: editor, item: fontItem)
+        }
+        fontItem.accessibilityLabel = L("text.font")
         items = [
             fontItem,
             item("textformat.size.smaller", L("text.smaller")) { [weak self] in self?.editor?.changeEditingText { $0.fontSize = max(6, $0.fontSize - 2) } },
@@ -339,76 +349,5 @@ final class TextFormatBar: UIToolbar {
             color.setFill()
             UIBezierPath(ovalIn: CGRect(x: 2, y: 2, width: 18, height: 18)).fill()
         }.withRenderingMode(.alwaysOriginal)
-    }
-}
-
-/// Onglets des documents ouverts pendant la session.
-final class DocumentTabsView: UIView {
-    var onSelect: ((UUID) -> Void)?
-    var onClose: ((UUID) -> Void)?
-    private let library: LibraryStore
-    private let current: UUID
-    private let scroll = UIScrollView()
-    private let stack = UIStackView()
-    private var height: NSLayoutConstraint!
-
-    init(library: LibraryStore, current: UUID) {
-        self.library = library
-        self.current = current
-        super.init(frame: .zero)
-        scroll.showsHorizontalScrollIndicator = false
-        stack.axis = .horizontal
-        stack.spacing = 6
-        for v in [scroll, stack] { v.translatesAutoresizingMaskIntoConstraints = false }
-        addSubview(scroll)
-        scroll.addSubview(stack)
-        height = heightAnchor.constraint(equalToConstant: 0)
-        NSLayoutConstraint.activate([
-            height,
-            scroll.topAnchor.constraint(equalTo: topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 4),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -4),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-            stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor, constant: -8),
-        ])
-        accessibilityLabel = L("tabs.label")
-        reload()
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) non utilisé") }
-
-    func reload() {
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let tabs = library.openTabs.compactMap { library.index.item($0) }
-        isHidden = tabs.count < 2
-        height.constant = isHidden ? 0 : 40
-        for entry in tabs {
-            let selected = entry.id == current
-            var config = UIButton.Configuration.plain()
-            config.title = entry.title
-            config.baseForegroundColor = selected ? Theme.accent : Theme.text
-            config.titleLineBreakMode = .byTruncatingTail
-            config.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 4)
-            let id = entry.id
-            let title = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in self?.onSelect?(id) })
-            title.widthAnchor.constraint(lessThanOrEqualToConstant: 200).isActive = true
-            title.accessibilityLabel = entry.title
-            if selected { title.accessibilityTraits.insert(.selected) }
-            let close = UIButton(type: .system, primaryAction: UIAction { [weak self] _ in self?.onClose?(id) })
-            close.setImage(UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)), for: .normal)
-            close.tintColor = Theme.secondaryText
-            close.accessibilityLabel = L("tabs.close") + " " + entry.title
-            close.widthAnchor.constraint(equalToConstant: 32).isActive = true
-            let button = UIStackView(arrangedSubviews: [title, close])
-            button.backgroundColor = selected ? Theme.accentSoft : Theme.panel
-            button.layer.cornerRadius = 15
-            button.layer.borderWidth = 1
-            button.layer.borderColor = Theme.hairline.cgColor
-            stack.addArrangedSubview(button)
-        }
     }
 }

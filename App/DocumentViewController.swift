@@ -83,10 +83,16 @@ final class DocumentViewController: UIViewController, UITextViewDelegate, UINavi
         ])
         let colors = UIMenu(title: L("text.color"), children: ["#111111", "#1D2A44", "#C62828", "#2E7D32", "#1565C0", "#C2500F"].compactMap { hex in
             guard let c = RGBA(hex: hex) else { return nil }
-            return UIAction(title: hex, image: TextFormatBar.dot(InkConverter.uiColor(c))) { [weak self] _ in self?.apply(.foregroundColor, InkConverter.uiColor(c)) }
+            return UIAction(title: ColorNames.name(InkConverter.uiColor(c)), image: TextFormatBar.dot(InkConverter.uiColor(c))) { [weak self] _ in self?.apply(.foregroundColor, InkConverter.uiColor(c)) }
+        })
+        let fonts = UIMenu(title: L("text.font"), children: FontFamily.Group.allCases.map { group in
+            UIMenu(title: group.title, children: FontFamily.available.filter { $0.group == group }.map { family in
+                UIAction(title: family.displayName) { [weak self] _ in self?.setFamily(family) }
+            })
         })
         bar.items = [
             UIBarButtonItem(title: L("document.style"), menu: styles),
+            UIBarButtonItem(image: UIImage(systemName: "textformat"), menu: fonts),
             button("bold", L("text.bold")) { [weak self] in self?.toggleTrait(.traitBold) },
             button("italic", L("text.italic")) { [weak self] in self?.toggleTrait(.traitItalic) },
             button("underline", L("text.underline")) { [weak self] in self?.toggleUnderline() },
@@ -121,6 +127,23 @@ final class DocumentViewController: UIViewController, UITextViewDelegate, UINavi
             return
         }
         edit { text, range in text.addAttribute(.font, value: UIFont.systemFont(ofSize: size, weight: weight), range: range) }
+    }
+
+    /// Change la famille de police en gardant taille, gras et italique.
+    private func setFamily(_ family: FontFamily) {
+        func convert(_ font: UIFont) -> UIFont {
+            let traits = font.fontDescriptor.symbolicTraits
+            return family.font(size: font.pointSize, bold: traits.contains(.traitBold), italic: traits.contains(.traitItalic))
+        }
+        if targetRange.length == 0 {
+            textView.typingAttributes[.font] = convert((textView.typingAttributes[.font] as? UIFont) ?? bodyFont)
+            return
+        }
+        edit { text, range in
+            text.enumerateAttribute(.font, in: range) { value, sub, _ in
+                text.addAttribute(.font, value: convert((value as? UIFont) ?? self.bodyFont), range: sub)
+            }
+        }
     }
 
     private func toggleTrait(_ trait: UIFontDescriptor.SymbolicTraits) {

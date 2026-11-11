@@ -8,6 +8,8 @@ protocol PagePanelDataSource: AnyObject {
     func panelSelect(_ index: Int)
     func panelMove(from: Int, to: Int)
     func panelMenu(for index: Int) -> UIMenu
+    func panelToggleBookmark(_ index: Int)
+    func panelAddPage()
     func panelClose()
 }
 
@@ -18,7 +20,10 @@ final class PagePanelView: UIView, UICollectionViewDataSource, UICollectionViewD
 
     private enum Mode: Int { case pages, bookmarks, outline }
 
-    private let segments = UISegmentedControl(items: [L("panel.pages"), L("panel.bookmarks"), L("panel.outline")])
+    private let segments = UISegmentedControl(items: [
+        UIImage(systemName: "doc")!, UIImage(systemName: "bookmark")!, UIImage(systemName: "list.bullet.indent")!,
+    ])
+    private let titleLabel = UILabel()
     private let grid: UICollectionView
     private let list = UITableView(frame: .zero, style: .insetGrouped)
     private let empty = UILabel()
@@ -33,21 +38,30 @@ final class PagePanelView: UIView, UICollectionViewDataSource, UICollectionViewD
         flow.sectionInset = UIEdgeInsets(top: 12, left: 14, bottom: 30, right: 14)
         grid = UICollectionView(frame: .zero, collectionViewLayout: flow)
         super.init(frame: frame)
-        backgroundColor = Theme.panel
+        backgroundColor = Theme.sheet
+        overrideUserInterfaceStyle = .dark
         layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.18
+        layer.shadowOpacity = 0.3
         layer.shadowRadius = 16
         accessibilityViewIsModal = false
 
-        let close = UIButton(type: .system, primaryAction: UIAction { [weak self] _ in self?.dataSource?.panelClose() })
-        close.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        close.tintColor = Theme.secondaryText
-        close.accessibilityLabel = L("common.close")
+        let close = ChromeButton.make("xmark", L("common.close")) { [weak self] _ in self?.dataSource?.panelClose() }
+        titleLabel.text = L("panel.pages")
+        titleLabel.font = Theme.rounded(18, .semibold, style: .headline)
+        titleLabel.textColor = Theme.chromeText
+        titleLabel.textAlignment = .center
+        titleLabel.accessibilityTraits = .header
 
+        for (i, key) in ["panel.pages", "panel.bookmarks", "panel.outline"].enumerated() {
+            segments.imageForSegment(at: i)?.accessibilityLabel = L(key)
+        }
+        segments.selectedSegmentTintColor = Theme.chromeLine
+        segments.backgroundColor = Theme.sheetCard
         segments.selectedSegmentIndex = 0
         segments.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             self.mode = Mode(rawValue: self.segments.selectedSegmentIndex) ?? .pages
+            self.titleLabel.text = L(["panel.pages", "panel.bookmarks", "panel.outline"][self.mode.rawValue])
             self.reload()
         }, for: .valueChanged)
 
@@ -55,6 +69,7 @@ final class PagePanelView: UIView, UICollectionViewDataSource, UICollectionViewD
         grid.dataSource = self
         grid.delegate = self
         grid.register(PageThumbCell.self, forCellWithReuseIdentifier: "page")
+        grid.register(AddPageCell.self, forCellWithReuseIdentifier: "add")
         grid.addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(reorder(_:))))
 
         list.backgroundColor = .clear
@@ -62,24 +77,27 @@ final class PagePanelView: UIView, UICollectionViewDataSource, UICollectionViewD
         list.delegate = self
         list.register(UITableViewCell.self, forCellReuseIdentifier: "row")
 
-        empty.textColor = Theme.secondaryText
+        empty.textColor = Theme.chromeMuted
         empty.font = .preferredFont(forTextStyle: .callout)
         empty.numberOfLines = 0
         empty.textAlignment = .center
 
-        let header = UIStackView(arrangedSubviews: [segments, close])
-        header.spacing = 8
-        header.alignment = .center
+        let spacer = UIView()
+        let top = UIStackView(arrangedSubviews: [spacer, titleLabel, close])
+        top.alignment = .center
+        spacer.widthAnchor.constraint(equalTo: close.widthAnchor).isActive = true
+        let header = UIStackView(arrangedSubviews: [top, segments])
+        header.axis = .vertical
+        header.spacing = 10
         for v in [header, grid, list, empty] {
             v.translatesAutoresizingMaskIntoConstraints = false
             addSubview(v)
         }
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 10),
-            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            close.widthAnchor.constraint(equalToConstant: 44),
-            close.heightAnchor.constraint(equalToConstant: 44),
+            header.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            segments.heightAnchor.constraint(equalToConstant: 38),
             grid.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6),
             grid.leadingAnchor.constraint(equalTo: leadingAnchor),
             grid.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -126,36 +144,49 @@ final class PagePanelView: UIView, UICollectionViewDataSource, UICollectionViewD
     private var thumbWidth: CGFloat { max(80, (bounds.width - 14 * 2 - 12) / 2) }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        rows.count
+        rows.count + 1
     }
 
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         let pages = dataSource?.panelPages ?? []
-        guard pages.indices.contains(indexPath.item) else { return CGSize(width: thumbWidth, height: thumbWidth) }
-        let p = pages[indexPath.item]
-        return CGSize(width: thumbWidth, height: thumbWidth * CGFloat(p.height / p.width) + 24)
+        // Dernière tuile : ajouter une page, aux proportions de la dernière page.
+        let p = pages.indices.contains(indexPath.item) ? pages[indexPath.item] : pages.last
+        guard let p else { return CGSize(width: thumbWidth, height: thumbWidth) }
+        return CGSize(width: thumbWidth, height: thumbWidth * CGFloat(p.height / p.width) + 30)
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "page", for: indexPath) as! PageThumbCell
         let index = indexPath.item
+        if index >= rows.count {
+            return collectionView.dequeueReusableCell(withReuseIdentifier: "add", for: indexPath)
+        }
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "page", for: indexPath) as! PageThumbCell
         let pages = dataSource?.panelPages ?? []
         if thumbnails[index] == nil { thumbnails[index] = dataSource?.panelThumbnail(index, width: thumbWidth * 2) }
         cell.configure(image: thumbnails[index], number: index + 1, current: index == dataSource?.panelCurrentIndex,
                        bookmarked: pages.indices.contains(index) && pages[index].bookmarked)
+        cell.menu = { [weak self] in self?.dataSource?.panelMenu(for: index) ?? UIMenu() }
+        cell.onBookmark = { [weak self] in
+            self?.dataSource?.panelToggleBookmark(index)
+        }
         return cell
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        dataSource?.panelSelect(indexPath.item)
+        if indexPath.item >= rows.count { dataSource?.panelAddPage() } else { dataSource?.panelSelect(indexPath.item) }
     }
 
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
-        guard let index = indexPaths.first?.item else { return nil }
+        guard let index = indexPaths.first?.item, index < rows.count else { return nil }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in self?.dataSource?.panelMenu(for: index) }
     }
 
-    func collectionView(_ collectionView: UICollectionView, canMoveItemAt indexPath: IndexPath) -> Bool { true }
+    func collectionView(_ collectionView: UICollectionView, canMoveItemAt indexPath: IndexPath) -> Bool { indexPath.item < rows.count }
+
+    func collectionView(_ collectionView: UICollectionView, targetIndexPathForMoveOfItemFromOriginalIndexPath originalIndexPath: IndexPath,
+                        atCurrentIndexPath currentIndexPath: IndexPath, toProposedIndexPath proposedIndexPath: IndexPath) -> IndexPath {
+        IndexPath(item: min(proposedIndexPath.item, rows.count - 1), section: 0)
+    }
 
     func collectionView(_ collectionView: UICollectionView, moveItemAt sourceIndexPath: IndexPath, to destinationIndexPath: IndexPath) {
         thumbnails.removeAll()
@@ -189,7 +220,7 @@ final class PagePanelView: UIView, UICollectionViewDataSource, UICollectionViewD
         content.image = UIImage(systemName: mode == .bookmarks ? "bookmark.fill" : "list.bullet.indent")
         content.imageProperties.tintColor = Theme.accent
         cell.contentConfiguration = content
-        cell.backgroundColor = Theme.desk
+        cell.backgroundColor = Theme.sheetCard
         return cell
     }
 
@@ -200,36 +231,48 @@ final class PagePanelView: UIView, UICollectionViewDataSource, UICollectionViewD
 }
 
 final class PageThumbCell: UICollectionViewCell {
+    var menu: (() -> UIMenu)?
+    var onBookmark: (() -> Void)?
     private let image = UIImageView()
     private let number = UILabel()
-    private let mark = UIImageView(image: UIImage(systemName: "bookmark.fill"))
+    private let mark = UIButton(type: .system)
+    private let more = UIButton(type: .system)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         image.contentMode = .scaleAspectFit
         image.backgroundColor = .white
-        image.layer.borderWidth = 1
-        image.layer.cornerRadius = 4
+        image.layer.cornerRadius = 6
+        image.layer.cornerCurve = .continuous
         image.clipsToBounds = true
-        number.font = .preferredFont(forTextStyle: .caption1)
-        number.textAlignment = .center
-        number.textColor = Theme.secondaryText
-        mark.tintColor = Theme.accent
-        for v in [image, number, mark] {
+        number.font = Theme.rounded(14, .semibold, style: .caption1)
+        number.textColor = Theme.chromeText
+        mark.addAction(UIAction { [weak self] _ in self?.onBookmark?() }, for: .primaryActionTriggered)
+        more.setImage(ChromeButton.symbol("chevron.down", size: 12, weight: .semibold), for: .normal)
+        more.tintColor = Theme.chromeMuted
+        more.showsMenuAsPrimaryAction = true
+        more.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] done in done(self?.menu?().children ?? []) }])
+        more.accessibilityLabel = L("page.options")
+        for v in [image, number, mark, more] as [UIView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             contentView.addSubview(v)
         }
         NSLayoutConstraint.activate([
-            image.topAnchor.constraint(equalTo: contentView.topAnchor),
-            image.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            image.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            image.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 2),
+            image.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 2),
+            image.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -2),
             image.bottomAnchor.constraint(equalTo: number.topAnchor, constant: -4),
-            number.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            number.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            number.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
             number.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-            number.heightAnchor.constraint(equalToConstant: 18),
-            mark.topAnchor.constraint(equalTo: image.topAnchor, constant: -2),
-            mark.trailingAnchor.constraint(equalTo: image.trailingAnchor, constant: -6),
+            number.heightAnchor.constraint(equalToConstant: 24),
+            more.centerYAnchor.constraint(equalTo: number.centerYAnchor),
+            more.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            more.widthAnchor.constraint(equalToConstant: 36),
+            more.heightAnchor.constraint(equalToConstant: 32),
+            mark.topAnchor.constraint(equalTo: image.topAnchor),
+            mark.trailingAnchor.constraint(equalTo: image.trailingAnchor),
+            mark.widthAnchor.constraint(equalToConstant: 40),
+            mark.heightAnchor.constraint(equalToConstant: 40),
         ])
     }
 
@@ -237,12 +280,48 @@ final class PageThumbCell: UICollectionViewCell {
 
     func configure(image img: UIImage?, number n: Int, current: Bool, bookmarked: Bool) {
         image.image = img
-        image.layer.borderColor = (current ? Theme.accent : Theme.hairline).cgColor
-        image.layer.borderWidth = current ? 3 : 1
+        image.layer.borderColor = (current ? Theme.coral : UIColor.clear).cgColor
+        image.layer.borderWidth = current ? 3 : 0
         number.text = "\(n)"
-        mark.isHidden = !bookmarked
+        mark.setImage(ChromeButton.symbol(bookmarked ? "bookmark.fill" : "bookmark", size: 16, weight: .medium), for: .normal)
+        mark.tintColor = bookmarked ? Theme.coral : UIColor(white: 0.55, alpha: 1)
+        mark.accessibilityLabel = bookmarked ? L("page.unbookmark") : L("page.bookmark")
+        image.isAccessibilityElement = true
+        image.accessibilityLabel = L("page.number", n) + (bookmarked ? ", " + L("panel.bookmarked") : "")
+        image.accessibilityTraits = current ? [.button, .selected] : .button
+        number.isAccessibilityElement = false
+    }
+}
+
+/// Dernière tuile du panneau : une page en pointillés pour en ajouter une.
+final class AddPageCell: UICollectionViewCell {
+    private let dash = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        dash.strokeColor = Theme.coral.cgColor
+        dash.fillColor = UIColor.clear.cgColor
+        dash.lineDashPattern = [6, 5]
+        dash.lineWidth = 2
+        contentView.layer.addSublayer(dash)
+        let plus = UIImageView(image: ChromeButton.symbol("plus", size: 26, weight: .light))
+        plus.tintColor = Theme.coral
+        plus.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(plus)
+        NSLayoutConstraint.activate([
+            plus.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            plus.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -14),
+        ])
         isAccessibilityElement = true
-        accessibilityLabel = L("page.number", n) + (bookmarked ? ", " + L("panel.bookmarked") : "")
-        accessibilityTraits = current ? [.button, .selected] : .button
+        accessibilityLabel = L("page.addLast")
+        accessibilityTraits = .button
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) non utilisé") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let r = contentView.bounds.inset(by: UIEdgeInsets(top: 3, left: 3, bottom: 31, right: 3))
+        dash.path = UIBezierPath(roundedRect: r, cornerRadius: 8).cgPath
     }
 }

@@ -96,19 +96,7 @@ enum PageRenderer {
     }
 
     static func font(for t: TextElement, scale: CGFloat = 1) -> UIFont {
-        let size = CGFloat(t.fontSize) * scale
-        var descriptor = UIFont.systemFont(ofSize: size).fontDescriptor
-        switch t.font {
-        case .system: break
-        case .serif: descriptor = descriptor.withDesign(.serif) ?? descriptor
-        case .rounded: descriptor = descriptor.withDesign(.rounded) ?? descriptor
-        case .monospaced: descriptor = descriptor.withDesign(.monospaced) ?? descriptor
-        }
-        var traits: UIFontDescriptor.SymbolicTraits = []
-        if t.bold { traits.insert(.traitBold) }
-        if t.italic { traits.insert(.traitItalic) }
-        descriptor = descriptor.withSymbolicTraits(traits) ?? descriptor
-        return UIFont(descriptor: descriptor, size: size)
+        t.font.font(size: CGFloat(t.fontSize) * scale, bold: t.bold, italic: t.italic)
     }
 
     static func attributed(_ t: TextElement, scale: CGFloat = 1) -> NSAttributedString {

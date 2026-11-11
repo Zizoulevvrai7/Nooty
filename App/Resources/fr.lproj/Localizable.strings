@@ -384,3 +384,52 @@
 "settings.version" = "Version";
 "settings.licenses" = "Licences";
 "licenses.text" = "Nooty est une application personnelle au code source public.\n\nEncodeur MP3 : shine (https://github.com/toots/shine), licence GNU LGPL 2. Son code source est inclus dans le dépôt de Nooty, qui peut être recompilé avec une autre version.\n\nFrameworks d’Apple : UIKit, SwiftUI, PencilKit, PDFKit, Vision, VisionKit, Speech, AVFoundation, LocalAuthentication.\n\nIA facultative : API Gemini de Google, avec votre propre clé.";
+
+/* Habillage de l'éditeur */
+"tabs.home" = "Bibliothèque";
+"readOnly.title" = "Lecture seule";
+"readOnly.on" = "Lecture seule activée : les outils sont masqués.";
+"readOnly.off" = "Lecture seule désactivée.";
+"tools.options" = "Réglages de l’outil";
+"eraser.options" = "Réglages de la gomme";
+"eraser.size" = "Taille";
+"shape.stroke" = "Réglages du trait";
+"shape.holdHint" = "Tracez une forme à main levée puis gardez le stylet immobile.";
+"text.size" = "Taille %d points";
+"width.title" = "Épaisseur";
+"width.settings" = "Réglages du trait";
+"menu.settings" = "Réglages";
+"menu.study" = "Réviser et convertir";
+"page.before" = "Avant";
+"page.after" = "Après";
+"page.last" = "À la fin";
+"page.templates" = "Modèles";
+"page.clearOrDelete" = "Vider ou supprimer la page";
+"page.options" = "Options de la page";
+"outline.add" = "Titre dans le plan";
+"export.thisPage" = "Cette page";
+"export.everything" = "Tout le bloc-notes";
+"export.nootyHint" = "Format ouvert, réimportable dans Nooty";
+"collection.item" = "Élément enregistré";
+"common.back" = "Retour";
+
+/* Couleurs */
+"color.black" = "Noir";
+"color.navy" = "Bleu nuit";
+"color.red" = "Rouge";
+"color.green" = "Vert";
+"color.blue" = "Bleu";
+"color.orange" = "Orange";
+"color.purple" = "Violet";
+"color.white" = "Blanc";
+"color.grey" = "Gris";
+"color.yellow" = "Jaune";
+"color.pink" = "Rose";
+
+/* Familles de polices */
+"fontGroup.system" = "Système";
+"fontGroup.sans" = "Sans empattement";
+"fontGroup.serif" = "Avec empattements";
+"fontGroup.mono" = "Machine à écrire";
+"fontGroup.hand" = "Manuscrites";
+"fontGroup.display" = "Affiche";
