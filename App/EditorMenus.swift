@@ -542,13 +542,20 @@ final class StrokePreviewView: UIView {
             let y = y0 + sin(t * .pi * 2 - .pi / 2) * h * -0.45
             // Pression croissante puis décroissante : les encres sensibles s'élargissent au centre.
             let force = 0.3 + sin(t * .pi) * 1.4
-            return PKStrokePoint(location: CGPoint(x: x0 + t * w, y: y), timeOffset: Double(i) * 0.01, size: CGSize(width: ink.width, height: ink.width),
+            // Épaisseur agrandie pour rester lisible dans l'aperçu.
+            let width = max(3, ink.width * 3)
+            return PKStrokePoint(location: CGPoint(x: x0 + t * w, y: y), timeOffset: Double(i) * 0.01, size: CGSize(width: width, height: width),
                                  opacity: 1, force: force, azimuth: .pi / 4, altitude: .pi / 3)
         }
         let stroke = PKStroke(ink: PKInk(ink.inkType, color: color), path: PKStrokePath(controlPoints: points, creationDate: Date()),
                               transform: .identity, mask: nil)
         let drawing = PKDrawing(strokes: [stroke])
-        imageView.image = drawing.image(from: bounds, scale: window?.screen.scale ?? 2)
+        // Rendu en apparence claire : en sombre, le moteur inverserait la couleur claire choisie.
+        var image: UIImage?
+        UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+            image = drawing.image(from: bounds, scale: window?.screen.scale ?? 2)
+        }
+        imageView.image = image
     }
 }
 

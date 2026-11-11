@@ -219,6 +219,7 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
         pagePill.addSubview(pageLabel)
         pagePill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(promptGoToPage)))
         pagePill.isAccessibilityElement = true
+        pagePill.accessibilityLabel = pageLabel.text
         pagePill.accessibilityTraits = .button
         pagePill.accessibilityHint = L("page.goToHint")
         view.addSubview(pagePill)

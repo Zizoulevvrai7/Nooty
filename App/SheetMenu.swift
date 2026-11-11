@@ -341,11 +341,15 @@ final class SheetMenuController: UIViewController, UIPopoverPresentationControll
         case .chevron:
             let chevron = UIImageView(image: UIImage(systemName: "chevron.right", withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)))
             chevron.tintColor = Theme.chromeMuted
+            chevron.contentMode = .center
+            hug(chevron)
             h.addArrangedSubview(chevron)
         case let .check(on):
             let check = UIImageView(image: UIImage(systemName: "checkmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)))
             check.tintColor = Theme.coral
             check.alpha = on ? 1 : 0
+            check.contentMode = .center
+            hug(check)
             h.addArrangedSubview(check)
             if on { button.accessibilityTraits.insert(.selected) }
         case let .value(text):
@@ -353,6 +357,7 @@ final class SheetMenuController: UIViewController, UIPopoverPresentationControll
             value.text = text
             value.textColor = Theme.chromeMuted
             value.font = .preferredFont(forTextStyle: .body)
+            hug(value)
             h.addArrangedSubview(value)
             accessibilityValue = text
         case let .toggle(on, change):
@@ -361,6 +366,7 @@ final class SheetMenuController: UIViewController, UIPopoverPresentationControll
             toggle.onTintColor = Theme.coral
             toggle.addAction(UIAction { [weak toggle] _ in change(toggle?.isOn ?? false) }, for: .valueChanged)
             toggle.accessibilityLabel = row.title
+            hug(toggle)
             // Le texte reste lisible ; l'interrupteur porte l'interaction.
             h.isUserInteractionEnabled = true
             title.isUserInteractionEnabled = false
@@ -389,6 +395,12 @@ final class SheetMenuController: UIViewController, UIPopoverPresentationControll
             }, for: .primaryActionTriggered)
         }
         return button
+    }
+
+    /// Les accessoires gardent leur taille ; le titre prend la place restante.
+    private func hug(_ v: UIView) {
+        v.setContentHuggingPriority(.required, for: .horizontal)
+        v.setContentCompressionResistancePriority(.required, for: .horizontal)
     }
 
     private func sliderView(_ s: Slider) -> UIView {
