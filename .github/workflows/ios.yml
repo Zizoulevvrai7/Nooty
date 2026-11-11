@@ -32,6 +32,8 @@ jobs:
 
       - name: Génération du projet Xcode
         run: |
+          # Signaler toutes les erreurs de compilation d'un coup, pas seulement la première.
+          defaults write com.apple.dt.Xcode IDEBuildingContinueBuildingAfterErrors -bool YES
           brew install xcodegen
           xcodegen --version
           xcodegen generate
