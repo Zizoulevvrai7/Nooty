@@ -112,6 +112,10 @@ enum PageRenderer {
     }
 
     static func attributed(_ t: TextElement, scale: CGFloat = 1) -> NSAttributedString {
+        NSAttributedString(string: t.text, attributes: attributes(t, scale: scale))
+    }
+
+    static func attributes(_ t: TextElement, scale: CGFloat = 1) -> [NSAttributedString.Key: Any] {
         let paragraph = NSMutableParagraphStyle()
         switch t.alignment {
         case .left: paragraph.alignment = .natural
@@ -124,7 +128,7 @@ enum PageRenderer {
             .paragraphStyle: paragraph,
         ]
         if t.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-        return NSAttributedString(string: t.text, attributes: attributes)
+        return attributes
     }
 
     static let textInset: CGFloat = 6

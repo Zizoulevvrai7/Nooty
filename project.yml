@@ -13,6 +13,8 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    # Signale toutes les erreurs de compilation, pas seulement celles du premier fichier en échec.
+    OTHER_SWIFT_FLAGS: "$(inherited) -continue-building-after-errors"
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "3"
 targets:

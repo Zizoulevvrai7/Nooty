@@ -1043,8 +1043,8 @@ final class NotebookViewController: UIViewController, PKCanvasViewDelegate, UICo
     private func applyTextStyle(_ t: TextElement) {
         guard let tv = textEditor else { return }
         let z = canvas.zoomScale
-        let attributed = PageRenderer.attributed(t, scale: z)
-        tv.typingAttributes = attributed.attributes(at: 0, effectiveRange: nil)
+        // Attributs calculés directement : une chaîne vide n'a pas d'attributs à lire.
+        tv.typingAttributes = PageRenderer.attributes(t, scale: z)
         let selectionRange = tv.selectedRange
         tv.attributedText = PageRenderer.attributed(TextElement(frame: t.frame, text: tv.text, font: t.font, fontSize: t.fontSize, color: t.color, bold: t.bold, italic: t.italic, underline: t.underline, alignment: t.alignment), scale: z)
         tv.selectedRange = selectionRange

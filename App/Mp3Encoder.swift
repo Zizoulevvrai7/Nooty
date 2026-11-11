@@ -27,7 +27,7 @@ enum Mp3Encoder {
     }
 
     /// Encode un flux d'échantillons fourni par morceaux ; chaque morceau encodé est passé à `write`.
-    static func encode(chunks: (([Int16]) -> Void) throws -> Void, into write: (Data) -> Void) throws {
+    static func encode(chunks: (([Int16]) -> Void) throws -> Void, into write: @escaping (Data) -> Void) throws {
         var config = shine_config_t()
         config.wave.channels = PCM_MONO
         config.wave.samplerate = Int32(sampleRate)
