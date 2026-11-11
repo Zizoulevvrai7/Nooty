@@ -3,7 +3,7 @@ import Foundation
 /// Constantes du format documentaire natif.
 public enum NootyFormat {
     /// Version du schéma. Toute évolution incompatible l'incrémente et ajoute une migration.
-    public static let schemaVersion = 1
+    public static let schemaVersion = 2
     public static let pageFormat = "nooty.page"
 }
 
@@ -297,15 +297,21 @@ public struct Page: Identifiable, Equatable, Sendable {
     public var background: Background
     /// Traits dans l'ordre d'affichage (le dernier est au-dessus).
     public var strokes: [Stroke]
+    /// Images, zones de texte et rubans, dans l'ordre d'affichage.
+    public var elements: [PageElement]
     /// Dernière modification, en millisecondes depuis 1970.
     public var updatedAt: Double
 
-    public init(id: UUID = UUID(), width: Double, height: Double, background: Background, strokes: [Stroke] = [], updatedAt: Double) {
+    public init(
+        id: UUID = UUID(), width: Double, height: Double, background: Background,
+        strokes: [Stroke] = [], elements: [PageElement] = [], updatedAt: Double
+    ) {
         self.id = id
         self.width = width
         self.height = height
         self.background = background
         self.strokes = strokes
+        self.elements = elements
         self.updatedAt = updatedAt
     }
 

@@ -26,6 +26,7 @@ public enum PageCodec {
     public static let maxStrokes = 200_000
     public static let maxPointsPerStroke = 100_000
     public static let maxMaskElements = 10_000
+    public static let maxElements = 5_000
 
     public static func encode(_ page: Page) throws -> Data {
         let file = PageFileDTO(format: NootyFormat.pageFormat, schemaVersion: NootyFormat.schemaVersion, page: try PageDTO(page))
@@ -35,19 +36,8 @@ public enum PageCodec {
     }
 
     public static func decode(_ data: Data) throws -> Page {
-        guard data.count <= maxBytes else { throw FormatError.tooLarge }
-        let header: Header
-        do {
-            header = try JSONDecoder().decode(Header.self, from: data)
-        } catch {
-            throw FormatError.notNooty
-        }
-        guard header.format == NootyFormat.pageFormat else { throw FormatError.notNooty }
-        guard header.schemaVersion >= 1 else { throw FormatError.invalid("version de schéma") }
-        guard header.schemaVersion <= NootyFormat.schemaVersion else {
-            throw FormatError.unsupportedVersion(header.schemaVersion)
-        }
-        // Une seule version existe : aucune migration à appliquer pour l'instant.
+        try checkHeader(data, format: NootyFormat.pageFormat, maxBytes: maxBytes, currentVersion: NootyFormat.schemaVersion)
+        // Version 1 → 2 : ajout des éléments (images, textes, rubans), absents en version 1.
         let file: PageFileDTO
         do {
             file = try JSONDecoder().decode(PageFileDTO.self, from: data)
@@ -131,6 +121,7 @@ struct PageDTO: Codable {
     var background: BackgroundDTO
     var updatedAt: Double
     var strokes: [StrokeDTO]
+    var elements: [PageElementDTO]?
 }
 
 func require(_ condition: Bool, _ what: @autoclosure () -> String) throws {
@@ -179,6 +170,7 @@ extension PageDTO {
                 pointComponents: InkPoint.componentCount, points: try PointPacking.pack(s.points)
             )
         }
+        elements = page.elements.map(PageElementDTO.init)
     }
 
     func validated() throws -> Page {
@@ -195,10 +187,17 @@ extension PageDTO {
             try require(seen.insert(stroke.id).inserted, "identifiant de trait en double")
             return stroke
         }
+        let rawElements = elements ?? []
+        try require(rawElements.count <= PageCodec.maxElements, "trop d’éléments")
+        let parsedElements = try rawElements.map { dto in
+            let e = try dto.validated()
+            try require(seen.insert(e.id).inserted, "identifiant d’élément en double")
+            return e
+        }
         return Page(
             id: pageID, width: width, height: height,
             background: bg,
-            strokes: parsed, updatedAt: updatedAt
+            strokes: parsed, elements: parsedElements, updatedAt: updatedAt
         )
     }
 }

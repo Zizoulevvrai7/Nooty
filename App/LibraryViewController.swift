@@ -201,7 +201,7 @@ final class LibraryViewController: UIViewController, UICollectionViewDelegate {
         switch item.kind {
         case .folder:
             navigationController?.pushViewController(LibraryViewController(store: store, folderID: item.id), animated: true)
-        case .notebook:
+        case .notebook, .whiteboard, .document:
             do {
                 let editor = try NotebookViewController(library: store, itemID: item.id)
                 navigationController?.pushViewController(editor, animated: true)

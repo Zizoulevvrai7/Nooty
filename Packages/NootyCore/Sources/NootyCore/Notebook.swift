@@ -1,22 +1,66 @@
 import Foundation
 
-/// Description d'une page dans un carnet : identité, dimensions et papier.
+/// Fond importé d'une page : une page de PDF ou une image (document scanné, photo).
+public enum Backdrop: Equatable, Sendable {
+    case pdf(resource: String, pageIndex: Int)
+    case image(resource: String)
+
+    public var resource: String {
+        switch self {
+        case let .pdf(r, _): return r
+        case let .image(r): return r
+        }
+    }
+}
+
+/// Description d'une page dans un carnet : identité, dimensions, papier et repères.
 public struct PageInfo: Identifiable, Equatable, Sendable {
     public var id: UUID
     public var width: Double
     public var height: Double
     public var background: Background
+    /// Fond importé, dessiné par-dessus le papier.
+    public var backdrop: Backdrop?
+    /// Titre de la page dans le plan ; nil si la page n'y figure pas.
+    public var title: String?
+    public var bookmarked: Bool
 
-    public init(id: UUID = UUID(), width: Double = Page.a4Width, height: Double = Page.a4Height, background: Background) {
+    public init(
+        id: UUID = UUID(), width: Double = Page.a4Width, height: Double = Page.a4Height,
+        background: Background, backdrop: Backdrop? = nil, title: String? = nil, bookmarked: Bool = false
+    ) {
         self.id = id
         self.width = width
         self.height = height
         self.background = background
+        self.backdrop = backdrop
+        self.title = title
+        self.bookmarked = bookmarked
     }
 }
 
-/// Manifeste d'un carnet : l'ordre des pages et la position de lecture.
-/// Le contenu de chaque page est dans son propre fichier.
+/// Formats de page proposés, en points typographiques (portrait).
+public enum PaperSize: String, CaseIterable, Sendable {
+    case a4, a5, a3, letter, square
+
+    public var portrait: (width: Double, height: Double) {
+        switch self {
+        case .a4: return (595.28, 841.89)
+        case .a5: return (419.53, 595.28)
+        case .a3: return (841.89, 1190.55)
+        case .letter: return (612, 792)
+        case .square: return (700, 700)
+        }
+    }
+
+    public func size(landscape: Bool) -> (width: Double, height: Double) {
+        let p = portrait
+        return landscape ? (p.height, p.width) : p
+    }
+}
+
+/// Manifeste d'un carnet : l'ordre des pages, la position de lecture, les enregistrements
+/// audio et les cartes de révision. Le contenu de chaque page est dans son propre fichier.
 public struct NotebookManifest: Equatable, Sendable {
     public static let maxPages = 5000
 
@@ -25,27 +69,33 @@ public struct NotebookManifest: Equatable, Sendable {
     /// Dernière page consultée, pour reprendre la lecture au même endroit.
     public var lastPageIndex: Int
     public var updatedAt: Double
+    public var recordings: [AudioRecording]
+    public var cards: [Flashcard]
 
-    public init(id: UUID = UUID(), pages: [PageInfo], lastPageIndex: Int = 0, updatedAt: Double) {
+    public init(
+        id: UUID = UUID(), pages: [PageInfo], lastPageIndex: Int = 0, updatedAt: Double,
+        recordings: [AudioRecording] = [], cards: [Flashcard] = []
+    ) {
         self.id = id
         self.pages = pages
         self.lastPageIndex = lastPageIndex
         self.updatedAt = updatedAt
+        self.recordings = recordings
+        self.cards = cards
+    }
+
+    /// Ressources référencées par le manifeste (fonds importés, audio).
+    public var referencedResources: Set<String> {
+        Set(pages.compactMap { $0.backdrop?.resource } + recordings.map(\.resource))
     }
 }
 
 public enum NotebookCodec {
     public static let format = "nooty.notebook"
-    public static let maxBytes = 16 * 1024 * 1024
+    public static let maxBytes = 64 * 1024 * 1024
 
     public static func encode(_ m: NotebookManifest) throws -> Data {
-        let file = NotebookFileDTO(
-            format: format, schemaVersion: NootyFormat.schemaVersion,
-            notebook: NotebookDTO(
-                id: m.id.uuidString, lastPageIndex: m.lastPageIndex, updatedAt: m.updatedAt,
-                pages: m.pages.map { PageInfoDTO(id: $0.id.uuidString, width: $0.width, height: $0.height, background: BackgroundDTO($0.background)) }
-            )
-        )
+        let file = NotebookFileDTO(format: format, schemaVersion: NootyFormat.schemaVersion, notebook: NotebookDTO(m))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try encoder.encode(file)
@@ -59,22 +109,7 @@ public enum NotebookCodec {
         } catch {
             throw FormatError.invalid("structure")
         }
-        let n = file.notebook
-        guard let id = UUID(uuidString: n.id) else { throw FormatError.invalid("identifiant de carnet") }
-        try require(!n.pages.isEmpty && n.pages.count <= NotebookManifest.maxPages, "nombre de pages")
-        try require(n.updatedAt.isFinite && n.updatedAt >= 0, "date de modification")
-        var seen = Set<UUID>()
-        let pages: [PageInfo] = try n.pages.map { p in
-            guard let pid = UUID(uuidString: p.id) else { throw FormatError.invalid("identifiant de page") }
-            try require(seen.insert(pid).inserted, "identifiant de page en double")
-            try require(p.width.isFinite && (10...20_000).contains(p.width), "largeur de page")
-            try require(p.height.isFinite && (10...20_000).contains(p.height), "hauteur de page")
-            return PageInfo(id: pid, width: p.width, height: p.height, background: try p.background.validated())
-        }
-        return NotebookManifest(
-            id: id, pages: pages,
-            lastPageIndex: min(max(0, n.lastPageIndex), pages.count - 1), updatedAt: n.updatedAt
-        )
+        return try file.notebook.validated()
     }
 }
 
@@ -89,6 +124,38 @@ struct NotebookDTO: Codable {
     var lastPageIndex: Int
     var updatedAt: Double
     var pages: [PageInfoDTO]
+    var recordings: [AudioRecordingDTO]?
+    var cards: [FlashcardDTO]?
+
+    init(_ m: NotebookManifest) {
+        id = m.id.uuidString
+        lastPageIndex = m.lastPageIndex
+        updatedAt = m.updatedAt
+        pages = m.pages.map(PageInfoDTO.init)
+        recordings = m.recordings.map(AudioRecordingDTO.init)
+        cards = m.cards.map(FlashcardDTO.init)
+    }
+
+    func validated() throws -> NotebookManifest {
+        guard let nid = UUID(uuidString: id) else { throw FormatError.invalid("identifiant de carnet") }
+        try require(!pages.isEmpty && pages.count <= NotebookManifest.maxPages, "nombre de pages")
+        try require(updatedAt.isFinite && updatedAt >= 0, "date de modification")
+        var seen = Set<UUID>()
+        let parsed: [PageInfo] = try pages.map { p in
+            let info = try p.validated()
+            try require(seen.insert(info.id).inserted, "identifiant de page en double")
+            return info
+        }
+        let recs = try (recordings ?? []).map { try $0.validated() }
+        try require(recs.count <= 500, "trop d’enregistrements")
+        try require(Set(recs.map(\.id)).count == recs.count, "enregistrement en double")
+        let deck = try (cards ?? []).map { try $0.validated() }
+        try require(deck.count <= 20_000, "trop de cartes")
+        return NotebookManifest(
+            id: nid, pages: parsed, lastPageIndex: min(max(0, lastPageIndex), parsed.count - 1),
+            updatedAt: updatedAt, recordings: recs, cards: deck
+        )
+    }
 }
 
 struct PageInfoDTO: Codable {
@@ -96,6 +163,63 @@ struct PageInfoDTO: Codable {
     var width: Double
     var height: Double
     var background: BackgroundDTO
+    var backdrop: BackdropDTO?
+    var title: String?
+    var bookmarked: Bool?
+
+    init(_ p: PageInfo) {
+        id = p.id.uuidString
+        width = p.width
+        height = p.height
+        background = BackgroundDTO(p.background)
+        backdrop = p.backdrop.map(BackdropDTO.init)
+        title = p.title
+        bookmarked = p.bookmarked
+    }
+
+    func validated() throws -> PageInfo {
+        guard let pid = UUID(uuidString: id) else { throw FormatError.invalid("identifiant de page") }
+        try require(width.isFinite && (10...20_000).contains(width), "largeur de page")
+        try require(height.isFinite && (10...20_000).contains(height), "hauteur de page")
+        if let title { try require(title.count <= 300, "titre de page") }
+        return PageInfo(
+            id: pid, width: width, height: height, background: try background.validated(),
+            backdrop: try backdrop?.validated(), title: title.flatMap(LibraryIndex.normalizedTitle),
+            bookmarked: bookmarked ?? false
+        )
+    }
+}
+
+struct BackdropDTO: Codable {
+    var type: String
+    var resource: String
+    var pageIndex: Int?
+
+    init(_ b: Backdrop) {
+        switch b {
+        case let .pdf(r, i):
+            type = "pdf"
+            resource = r
+            pageIndex = i
+        case let .image(r):
+            type = "image"
+            resource = r
+        }
+    }
+
+    func validated() throws -> Backdrop {
+        try require(ResourceName.isValid(resource), "ressource de fond")
+        switch type {
+        case "pdf":
+            let index = pageIndex ?? 0
+            try require(index >= 0 && index < 100_000, "page de PDF")
+            return .pdf(resource: resource, pageIndex: index)
+        case "image":
+            return .image(resource: resource)
+        default:
+            throw FormatError.invalid("type de fond")
+        }
+    }
 }
 
 // MARK: - Disposition des pages

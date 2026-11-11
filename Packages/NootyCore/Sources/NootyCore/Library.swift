@@ -1,7 +1,10 @@
 import Foundation
 
 public enum LibraryEntryKind: String, Sendable {
-    case folder, notebook
+    case folder, notebook, whiteboard, document
+
+    /// Vrai pour les éléments qui ont un dossier de fichiers (tout sauf les dossiers de la bibliothèque).
+    public var hasFiles: Bool { self != .folder }
 }
 
 /// Entrée de la bibliothèque : un dossier ou un carnet.
@@ -19,11 +22,13 @@ public struct LibraryEntry: Identifiable, Equatable, Sendable {
     public var color: RGBA
     /// Date de mise à la corbeille ; nil si l'élément n'y est pas.
     public var trashedAt: Double?
+    /// Ouverture protégée par Face ID ou le code de l'iPad.
+    public var locked: Bool
 
     public init(
         id: UUID = UUID(), kind: LibraryEntryKind, parentID: UUID? = nil, title: String,
         createdAt: Double, updatedAt: Double? = nil, favorite: Bool = false,
-        color: RGBA = .ink, trashedAt: Double? = nil
+        color: RGBA = .ink, trashedAt: Double? = nil, locked: Bool = false
     ) {
         self.id = id
         self.kind = kind
@@ -34,6 +39,7 @@ public struct LibraryEntry: Identifiable, Equatable, Sendable {
         self.favorite = favorite
         self.color = color
         self.trashedAt = trashedAt
+        self.locked = locked
     }
 }
 
@@ -99,7 +105,8 @@ public struct LibraryIndex: Equatable, Sendable {
 
     private func sorted(_ list: [LibraryEntry], by sort: LibrarySort) -> [LibraryEntry] {
         list.sorted { a, b in
-            if a.kind != b.kind { return a.kind == .folder }
+            let fa = a.kind == .folder, fb = b.kind == .folder
+            if fa != fb { return fa }
             switch sort {
             case .name:
                 let order = a.title.localizedStandardCompare(b.title)
@@ -172,6 +179,17 @@ public struct LibraryIndex: Equatable, Sendable {
         if let i = indexOf(id) { items[i].favorite = value }
     }
 
+    public mutating func setLocked(_ id: UUID, _ value: Bool) {
+        if let i = indexOf(id) { items[i].locked = value }
+    }
+
+    /// Éléments hors corbeille dont le titre contient la recherche (sans tenir compte des accents ni de la casse).
+    public func search(_ query: String) -> [LibraryEntry] {
+        let q = TextSearch.normalize(query)
+        guard !q.isEmpty else { return [] }
+        return sorted(items.filter { !isEffectivelyTrashed($0.id) && TextSearch.normalize($0.title).contains(q) }, by: .name)
+    }
+
     public mutating func setColor(_ id: UUID, _ color: RGBA) {
         if let i = indexOf(id) { items[i].color = color }
     }
@@ -199,7 +217,7 @@ public struct LibraryIndex: Equatable, Sendable {
     @discardableResult
     public mutating func deletePermanently(_ id: UUID) -> [UUID] {
         let doomed = Set(descendants(of: id) + [id])
-        let notebooks = items.filter { doomed.contains($0.id) && $0.kind == .notebook }.map(\.id)
+        let notebooks = items.filter { doomed.contains($0.id) && $0.kind.hasFiles }.map(\.id)
         items.removeAll { doomed.contains($0.id) }
         return notebooks
     }
@@ -287,6 +305,7 @@ struct LibraryEntryDTO: Codable {
     var favorite: Bool
     var color: String
     var trashedAt: Double?
+    var locked: Bool?
 
     init(_ i: LibraryEntry) {
         id = i.id.uuidString
@@ -298,6 +317,7 @@ struct LibraryEntryDTO: Codable {
         favorite = i.favorite
         color = i.color.hex
         trashedAt = i.trashedAt
+        locked = i.locked
     }
 
     func validated() throws -> LibraryEntry {
@@ -314,7 +334,7 @@ struct LibraryEntryDTO: Codable {
         if let trashedAt { try require(trashedAt.isFinite && trashedAt >= 0, "date de corbeille") }
         return LibraryEntry(
             id: uuid, kind: itemKind, parentID: parent, title: cleanTitle, createdAt: createdAt,
-            updatedAt: updatedAt, favorite: favorite, color: rgba, trashedAt: trashedAt
+            updatedAt: updatedAt, favorite: favorite, color: rgba, trashedAt: trashedAt, locked: locked ?? false
         )
     }
 }
