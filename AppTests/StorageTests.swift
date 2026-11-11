@@ -219,11 +219,14 @@ final class StorageTests: XCTestCase {
     func testM4AToMP3Conversion() throws {
         let m4a = dir.appendingPathComponent("son.m4a")
         let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
-        let file = try AVAudioFile(forWriting: m4a, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48_000, AVNumberOfChannelsKey: 1])
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000)!
-        buffer.frameLength = 48_000
-        for i in 0..<48_000 { buffer.floatChannelData![0][i] = Float(0.3 * sin(2 * Double.pi * 330 * Double(i) / 48_000)) }
-        try file.write(from: buffer)
+        do {
+            // Le fichier n'est finalisé qu'à la libération de l'objet, comme à l'arrêt d'un enregistrement.
+            let file = try AVAudioFile(forWriting: m4a, settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48_000, AVNumberOfChannelsKey: 1])
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 48_000)!
+            buffer.frameLength = 48_000
+            for i in 0..<48_000 { buffer.floatChannelData![0][i] = Float(0.3 * sin(2 * Double.pi * 330 * Double(i) / 48_000)) }
+            try file.write(from: buffer)
+        }
         let mp3 = dir.appendingPathComponent("son.mp3")
         try Mp3Encoder.convert(m4a, to: mp3)
         let size = try FileManager.default.attributesOfItem(atPath: mp3.path)[.size] as? Int ?? 0
