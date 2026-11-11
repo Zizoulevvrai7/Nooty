@@ -69,13 +69,13 @@ extension NotebookViewController {
         EditorToolbar.fill(toolbar.leading, [panelButton, search, ai, ChromeButton.divider(), reading])
 
         if readOnly {
-            EditorToolbar.fill(toolbar.center, [])
+            EditorToolbar.fill(toolbar.tools, [])
         } else {
             var center: [UIView] = [ToolKind.lasso, .pen, .highlighter, .eraser, .shape, .text, .tape, .laser].map(toolButton)
             center.insert(ChromeButton.divider(), at: 1)
             center.append(ChromeButton.divider())
             center.append(ChromeButton.make("photo.badge.plus", L("insert.title")) { [weak self] b in self?.presentInsertMenu(from: b) })
-            EditorToolbar.fill(toolbar.center, center)
+            EditorToolbar.fill(toolbar.tools, center)
         }
 
         var trailing: [UIView] = []

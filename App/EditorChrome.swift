@@ -83,14 +83,14 @@ enum ChromeButton {
 /// si la fenêtre est étroite (Split View).
 final class EditorToolbar: UIView {
     let leading = UIStackView()
-    let center = UIStackView()
+    let tools = UIStackView()
     let trailing = UIStackView()
     private let scroll = UIScrollView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = Theme.chrome
-        for s in [leading, center, trailing] {
+        for s in [leading, tools, trailing] {
             s.axis = .horizontal
             s.alignment = .center
             s.spacing = 4
@@ -100,9 +100,9 @@ final class EditorToolbar: UIView {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         addSubview(leading)
         addSubview(scroll)
-        scroll.addSubview(center)
+        scroll.addSubview(tools)
         addSubview(trailing)
-        let fit = scroll.widthAnchor.constraint(equalTo: center.widthAnchor)
+        let fit = scroll.widthAnchor.constraint(equalTo: tools.widthAnchor)
         fit.priority = .defaultHigh
         let centered = scroll.centerXAnchor.constraint(equalTo: centerXAnchor)
         centered.priority = .defaultLow
@@ -117,11 +117,11 @@ final class EditorToolbar: UIView {
             centered, fit,
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-            center.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            center.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-            center.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-            center.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-            center.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
+            tools.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            tools.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            tools.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            tools.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            tools.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
         accessibilityContainerType = .semanticGroup
         accessibilityLabel = L("tools.label")

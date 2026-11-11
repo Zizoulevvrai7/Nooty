@@ -132,7 +132,7 @@ final class AudioController: NSObject, AVAudioPlayerDelegate {
             timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.tick() }
             UIApplication.shared.isIdleTimerDisabled = true
             tick()
-            editor?.rebuildToolbar()
+            editor.rebuildToolbar()
         } catch {
             cleanupEngine()
             alert(L("audio.startFailed", error.localizedDescription))
