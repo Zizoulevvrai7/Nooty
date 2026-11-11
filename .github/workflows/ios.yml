@@ -69,26 +69,54 @@ jobs:
           path: Nooty.ipa
           retention-days: 30
 
-      # Contrôle visuel : captures des écrans principaux, publiées dans le journal.
-      # Ne bloque jamais la production de l'IPA.
-      - name: Captures d'écran (simulateur iPad)
+      # Version pour simulateur : à envoyer sur appetize.io pour essayer l'application dans un navigateur.
+      - name: Compilation pour simulateur (Appetize)
         continue-on-error: true
-        timeout-minutes: 15
         run: |
+          xcodebuild -project Nooty.xcodeproj -scheme Nooty -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild \
+            ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO -quiet build
+          cd simbuild/Build/Products/Debug-iphonesimulator && zip -qry "$GITHUB_WORKSPACE/Nooty-simulateur.zip" Nooty.app
+          ls -lh "$GITHUB_WORKSPACE/Nooty-simulateur.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nooty-simulateur
+          path: Nooty-simulateur.zip
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # Contrôle visuel : parcours filmé des écrans principaux, et captures publiées dans le journal.
+      # Ne bloque jamais la production de l'IPA.
+      - name: Captures d'écran et vidéo (simulateur iPad)
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$GITHUB_WORKSPACE/Nooty-parcours.mp4" &
+          REC=$!
+          sleep 2
           xcodebuild test -project Nooty.xcodeproj -scheme NootyUITests -destination "id=$UDID" \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | grep -E "error:|Test Case .*(passed|failed)|\*\* TEST" || true
+            CODE_SIGNING_ALLOWED=NO > ui.log 2>&1 || true
+          kill -INT $REC || true
+          wait $REC || true
           for f in /tmp/nooty-captures/*.png; do
             [ -f "$f" ] || continue
-            sips -s format jpeg -s formatOptions 40 -Z 1000 "$f" --out "${f%.png}.jpg" > /dev/null
+            sips -s format jpeg -s formatOptions 30 -Z 760 "$f" --out "${f%.png}.jpg" > /dev/null
             echo "=====CAPTURE $(basename "${f%.png}")====="
-            base64 -i "${f%.png}.jpg" | fold -w 120
+            base64 -i "${f%.png}.jpg" | fold -w 160
             echo "=====FIN====="
           done
+          echo "=====RÉSULTAT DES TESTS D'INTERFACE====="
+          grep -E "error:|Test Case .*(passed|failed)|\*\* TEST|Terminating|crash" ui.log | head -40 || true
+          ls /tmp/nooty-captures || true
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Nooty-captures
-          path: /tmp/nooty-captures/*.png
+          path: |
+            /tmp/nooty-captures/*.png
+            Nooty-parcours.mp4
           if-no-files-found: ignore
           retention-days: 14
