@@ -57,14 +57,17 @@ Rien n'a été vérifié sur un iPad réel avec le Pencil, le micro ou l'apparei
 | Sélection d'image ou de texte : déplacer, redimensionner, pivoter, dupliquer, ordre | ✅ | Non | Un élément à la fois |
 | Formes : segment, flèche, rectangle, ellipse, triangle, losange | ✅ | Unitaire | Contour seulement, sans remplissage |
 | Dessiner et maintenir pour redresser une forme | ✅ | Unitaire (reconnaissance) | — |
-| Zone de texte : police, taille, couleur, gras, italique, souligné, alignement | ✅ | Simulateur | Style uniforme dans une zone |
+| Zone de texte : 35 polices (système, linéales, à empattements, machine, manuscrites, affiche), taille, couleur, gras, italique, souligné, alignement | ✅ | Simulateur | Style uniforme dans une zone ; une police absente de l'iPad n'est pas proposée |
+| Mode lecture seule | ✅ | Simulateur | — |
 | Note repositionnable | ✅ | Non | — |
 | Ruban de masquage, tout révéler ou masquer | ✅ | Unitaire (format) | — |
 | Pointeur laser | ✅ | Non | Visible sur l'iPad seulement |
 | Annuler, rétablir | ✅ | Non | Vidés quand on ajoute, déplace ou supprime une page |
 | Stabilisation du trait | ⛔ | — | Non exposée par PencilKit |
 | Règle | 🟡 | — | Celle de PencilKit n'est pas affichée sans sa palette |
+| Barre d'outils en trois groupes, réglages de l'outil dans une rangée flottante, menus en bulle | ✅ | Simulateur | — |
 | Personnalisation de la barre d'outils | ⬜ | — | — |
+| Réglages fins du stylo (finesse de pointe, sensibilité à la pression, réduction de latence) | ⛔ | — | Non exposés par PencilKit |
 
 ## 5. Images et éléments
 
